@@ -1,0 +1,21 @@
+[package]
+name = "siderite"
+version = "0.0.1"
+authors = ["Bond-009 <bond.009@outlook.com>"]
+keywords = ["siderite", "minecraft", "server"]
+
+[[bin]]
+name = "siderite"
+path = "server/main.rs"
+doc = false
+test = false
+bench = false
+
+[lib]
+name = "siderite"
+path = "src/lib.rs"
+
+[dependencies]
+#log = "0.3"
+byteorder = "1.2.2"
+serde_json = "1.0.17"
