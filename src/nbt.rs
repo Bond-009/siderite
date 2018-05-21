@@ -53,11 +53,12 @@ pub trait ReadNBTExt: Read {
     }
 
     #[inline]
-    fn read_byte_array(&mut self) -> Result<Vec<i8>>
+    fn read_byte_array(&mut self, lenght: usize) -> Result<Vec<i8>>
     {
-        let len = try!(self.read_i32::<BigEndian>()) as usize;
-        let mut buf = Vec::with_capacity(len);
-        for _ in 0..len {
+        // REVIEW:
+        //let len = try!(self.read_i32::<BigEndian>()) as usize;
+        let mut buf = Vec::with_capacity(lenght);
+        for _ in 0..lenght {
             buf.push(try!(self.read_i8()));
         }
         Ok(buf)
@@ -66,6 +67,7 @@ pub trait ReadNBTExt: Read {
     #[inline]
     fn read_int_array(&mut self) -> Result<Vec<i32>>
     {
+        // REVIEW:
         let len = try!(self.read_i32::<BigEndian>()) as usize;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
@@ -77,6 +79,7 @@ pub trait ReadNBTExt: Read {
     #[inline]
     fn read_long_array(&mut self) -> Result<Vec<i64>>
     {
+        // REVIEW:
         let len = self.read_i32::<BigEndian>()? as usize;
         let mut buf = Vec::with_capacity(len);
         for _ in 0..len {
@@ -174,7 +177,8 @@ pub trait WriteNBTExt: Write {
     #[inline]
     fn write_byte_array(&mut self, value: &[i8]) -> Result<()>
     {
-        try!(self.write_i32::<BigEndian>(value.len() as i32));
+        // REVIEW:
+        //try!(self.write_i32::<BigEndian>(value.len() as i32));
         for &v in value {
             try!(self.write_i8(v));
         }
@@ -184,6 +188,7 @@ pub trait WriteNBTExt: Write {
     #[inline]
     fn write_int_array(&mut self, value: &[i32]) -> Result<()>
     {
+        // REVIEW:
         try!(self.write_i32::<BigEndian>(value.len() as i32));
         for &v in value {
             try!(self.write_i32::<BigEndian>(v));
@@ -194,6 +199,7 @@ pub trait WriteNBTExt: Write {
     #[inline]
     fn write_long_array(&mut self, value: &[i64]) -> Result<()>
     {
+        // REVIEW:
         self.write_i32::<BigEndian>(value.len() as i32)?;
         for &v in value {
             self.write_i64::<BigEndian>(v)?;
