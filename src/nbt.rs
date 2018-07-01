@@ -17,6 +17,17 @@ pub trait ReadNBTExt: Read {
     }
 
     #[inline]
+    fn read_bool(&mut self) -> Result<bool>
+    {
+        match self.read_u8() {
+            Ok(0x00) => Ok(false),
+            Ok(0x01) => Ok(true),
+            Err(e) => Err(e),
+            _ => Err(Error::new(ErrorKind::InvalidInput, "Couldn't create bool"))
+        }
+    }
+
+    #[inline]
     fn read_short(&mut self) -> Result<i16>
     {
         self.read_i16::<BigEndian>()
@@ -142,6 +153,17 @@ pub trait WriteNBTExt: Write {
     fn write_ubyte(&mut self, value: u8) -> Result<()>
     {
         self.write_u8(value)
+    }
+
+    #[inline]
+    fn write_bool(&mut self, value: bool) -> Result<()>
+    {
+        if value {
+            self.write_u8(0x01)
+        }
+        else {
+            self.write_u8(0x00)
+        }
     }
 
     #[inline]

@@ -12,7 +12,8 @@ fn main() {
         port: 25565,
         description: "A custom MC server".to_string(),
         max_players: 100,
-        favicon: String::new()
+        favicon: String::new(),
+        authentication: false, // Set to true when auth is implemented
     });
     let server_ref = Arc::new(server);
     Server::start(server_ref.clone());

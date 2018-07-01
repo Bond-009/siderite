@@ -1,4 +1,5 @@
 extern crate byteorder;
+extern crate circbuf;
 #[macro_use]
 extern crate log;
 extern crate openssl;
@@ -9,9 +10,10 @@ extern crate num_traits;
 extern crate serde_json;
 extern crate rand;
 
+pub mod nbt;
 pub mod player;
 pub mod server;
 pub mod world;
-pub mod nbt;
 
+mod client;
 mod protocol;

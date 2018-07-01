@@ -1,13 +1,13 @@
 use player::Player;
 
 pub struct WorldConfig {
-    name: String
+    name: String,
 }
 
 pub struct World {
     pub players: Vec<Player>,
 
-    name: String
+    _name: String,
 }
 
 impl World {
@@ -16,7 +16,7 @@ impl World {
         World {
             players: Vec::new(),
 
-            name: config.name
+            _name: config.name
         }
     }
 }
