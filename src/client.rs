@@ -1,24 +1,28 @@
 use std::sync::{Arc, Mutex, RwLock};
+use std::sync::mpsc::Sender;
 use std::net::TcpStream;
 
 use protocol::Protocol;
+use protocol::authenticator::AuthInfo;
 use server::Server;
 
 pub struct Client {
-    _id: i32,
+    id: i32,
     username: Option<String>,
     server: Arc<Server>,
-    protocol: Option<Arc<Mutex<Protocol>>>
+    protocol: Option<Arc<Mutex<Protocol>>>,
+    authenticator: Mutex<Sender<AuthInfo>>
 }
 
 impl Client {
 
-    pub fn new(id: i32, server: Arc<Server>, stream: TcpStream) -> Arc<RwLock<Client>> {
+    pub fn new(id: i32, server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Arc<RwLock<Client>> {
         let client = Client {
-            _id: id,
+            id: id,
             username: None,
             server: server,
-            protocol: None
+            protocol: None,
+            authenticator: Mutex::new(authenticator)
         };
         let ts_client = Arc::new(RwLock::new(client));
         ts_client.write().unwrap().set_protocol(Protocol::new(ts_client.clone(), stream));
@@ -42,7 +46,11 @@ impl Client {
     }
 
     pub fn handle_login(&mut self, username: String) {
-        self.username = Some(username);
-        // TODO: authenticate
+        self.username = Some(username.clone());
+
+        self.authenticator.lock().unwrap().send(AuthInfo {
+            client_id: self.id,
+            username: username
+        }).unwrap();
     }
 }

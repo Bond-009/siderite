@@ -1,3 +1,4 @@
+pub mod authenticator;
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -68,6 +69,8 @@ impl Protocol {
         //assert_eq!(payload, 1);
     }
 
+    // In
+
     pub fn process_data(&mut self) {
         let mut tmp = [0u8; 512];
         let len = self.stream.peek(&mut tmp).unwrap(); // or_error()
@@ -97,7 +100,7 @@ impl Protocol {
         }
     }
 
-    pub fn handle_packets(&mut self) {
+    pub fn handle_in_packets(&mut self) {
         loop {
             if self.received_data.len() == 0 {
                 // No data
@@ -145,8 +148,6 @@ impl Protocol {
         }
     }
 
-
-
     fn handle_packet(&mut self, rbuf: &[u8], id: i32) {
         debug!("Packet id: {:#X}, state: {:?}", id, self.state);
         match self.state {
@@ -174,6 +175,27 @@ impl Protocol {
                 unimplemented!("No packets implemented")
             }
         }
+    }
+
+    // Out:
+
+    fn _send_packet(&mut self, packet: Packet) {
+        match packet {
+            Packet::Disconnect(reason) => self.disconnect(&reason)
+        }
+    }
+
+    fn write_packet(&mut self, mut rbuf: &[u8]) {
+        let lenght = rbuf.len() as i32;
+        debug!("Write packet: len {}, id: {:#X}", lenght, rbuf.first().unwrap());
+        let mut vec = Vec::with_capacity(rbuf.len() + 4);
+        vec.write_var_int(lenght).unwrap(); // Write packet lenght
+        vec.write_all(&mut rbuf).unwrap(); // Write packet data
+
+        if self.encrypted {
+            vec = encrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
+        }
+        self.stream.write(&mut vec).unwrap();
     }
 
     // HandSchaking packets:
@@ -238,7 +260,7 @@ impl Protocol {
         debug!("Player name: {}", username);
 
         let server = self.client.read().unwrap().get_server();
-        if server.authentication {
+        if server.authenticate {
             let mut wbuf = Vec::new();
             wbuf.write_var_int(0x01).unwrap(); // Encryption Request packet
             wbuf.write_string(&server.id).unwrap();
@@ -338,20 +360,5 @@ impl Protocol {
         });
         wbuf.write_string(&reason.to_string()).unwrap();
         self.write_packet(&wbuf);
-    }
-
-    // Helper functions:
-
-    fn write_packet(&mut self, mut rbuf: &[u8]) {
-        let lenght = rbuf.len() as i32;
-        debug!("Write packet: len {}, id: {:#X}", lenght, rbuf.first().unwrap());
-        let mut vec = Vec::with_capacity(rbuf.len() + 4);
-        vec.write_var_int(lenght).unwrap(); // Write packet lenght
-        vec.write_all(&mut rbuf).unwrap(); // Write packet data
-
-        if self.encrypted {
-            vec = encrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
-        }
-        self.stream.write(&mut vec).unwrap();
     }
 }

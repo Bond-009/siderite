@@ -7,6 +7,7 @@ use openssl::rsa::Rsa;
 
 use client::Client;
 use protocol::Protocol;
+use protocol::authenticator::Authenticator;
 use world::World;
 
 pub struct ServerConfig {
@@ -30,9 +31,10 @@ pub struct Server {
     pub max_players: i32,
     pub favicon: String,
 
-    pub port: u16, // TODO: shouldn't need to be pub
+    port: u16,
 
-    pub authentication: bool,
+    pub authenticate: bool,
+
     pub public_key_der: Vec<u8>,
     pub private_key: Rsa<Private>
 }
@@ -45,7 +47,7 @@ impl Server {
             id: "-".to_owned(), // TODO: Generate random ID
 
             worlds: Vec::new(),
-            clients: Mutex::new(Vec::new()),
+            clients: Mutex::new(Vec::new()),    
 
             description: config.description,
             max_players: config.max_players,
@@ -53,7 +55,8 @@ impl Server {
 
             port: config.port,
 
-            authentication: config.authentication,
+            authenticate: config.authentication,
+
             public_key_der: rsa.public_key_to_der().unwrap(),
             private_key: rsa
         }
@@ -69,6 +72,8 @@ impl Server {
             }
         });
 
+        let auth = Authenticator::start(svr.clone());
+
         let listener = TcpListener::bind(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), svr.port)
             ).unwrap();
@@ -76,6 +81,7 @@ impl Server {
 
         for connection in listener.incoming() {
             let consvr = svr.clone();
+            let auth_c = auth.clone();
             thread::spawn(move || {
                 info!("Incomming connection!");
                 let mut stream = connection.unwrap();
@@ -86,7 +92,8 @@ impl Server {
                 let protsvr = consvr.clone();
                 let mut clients = consvr.clients.lock().unwrap();
                 let id = clients.len() as i32;
-                let client = Client::new(id, protsvr, stream);
+
+                let client = Client::new(id, protsvr, stream, auth_c);
                 clients.push(client);
             });
         }
@@ -98,7 +105,7 @@ impl Server {
             let prot_p = client.read().unwrap().get_protocol().unwrap();
             let mut prot = prot_p.lock().unwrap();
             prot.process_data();
-            prot.handle_packets();
+            prot.handle_in_packets();
         }
     }
 
