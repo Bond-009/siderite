@@ -1,8 +1,12 @@
 pub mod authenticator;
+pub mod packets;
+pub mod thread;
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 
 use circbuf::CircBuf;
 use openssl::rsa::Padding;
@@ -10,8 +14,12 @@ use openssl::symm::{encrypt, Cipher};
 use nbt::{ReadNBTExt, WriteNBTExt};
 use num_traits::FromPrimitive;
 use rand::{thread_rng, Rng};
+use uuid::adapter::Hyphenated;
 
 use client::Client;
+use self::packets::Packet;
+use self::authenticator::AuthInfo;
+use server::Server;
 use world::World;
 
 #[repr(i32)]
@@ -25,6 +33,7 @@ enum State {
 
 pub struct Protocol {
     client: Arc<RwLock<Client>>,
+    receiver: Receiver<Packet>,
     stream: TcpStream,
     state: State,
     received_data: CircBuf,
@@ -35,11 +44,14 @@ pub struct Protocol {
 }
 
 impl Protocol {
-    pub fn new(client: Arc<RwLock<Client>>, stream: TcpStream) -> Protocol {
+
+    pub fn new(client_id: i32, server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Protocol {
         let mut arr = [0u8; 4];
         thread_rng().fill(&mut arr[..]);
+        let (tx, rx) = mpsc::channel();
         Protocol {
-            client: client,
+            client: Arc::new(RwLock::new(Client::new(client_id, server, tx, authenticator))), // TODO: client id
+            receiver: rx,
             stream: stream,
             state: State::HandSchaking,
             received_data: CircBuf::with_capacity(32 * 1024).unwrap(),
@@ -50,6 +62,12 @@ impl Protocol {
         }
     }
 
+    pub fn get_client(&self) -> Arc<RwLock<Client>> {
+        self.client.clone()
+    }
+
+    /// Checks if the first packet is a legacy ping packet (MC v1.4 - 1.6)
+    /// If it is, handles it and returns true
     pub fn legacy_ping(mut stream: &mut TcpStream) -> bool {
         // This packet uses a nonstandard format. It is never length-prefixed
         // and the packet ID is an Unsigned Byte instead of a VarInt.
@@ -57,6 +75,7 @@ impl Protocol {
         let mut tbuf = [0u8];
         stream.peek(&mut tbuf).unwrap();
         if tbuf[0] == 0xFE {
+            stream.read(&mut tbuf).unwrap();
             Protocol::handle_legacy_ping(&mut stream);
             stream.shutdown(Shutdown::Both).expect("shutdown call failed");
             return true;
@@ -64,9 +83,9 @@ impl Protocol {
         return false;
     }
 
-    fn handle_legacy_ping(_stream: &mut TcpStream) {
-        //let payload = stream.read_ubyte().unwrap();
-        //assert_eq!(payload, 1);
+    fn handle_legacy_ping(stream: &mut TcpStream) {
+        let payload = stream.read_ubyte().unwrap();
+        assert_eq!(payload, 1);
     }
 
     // In
@@ -179,8 +198,20 @@ impl Protocol {
 
     // Out:
 
-    fn _send_packet(&mut self, packet: Packet) {
+    pub fn handle_out_packets(&mut self) {
+        let mut packets = Vec::new();
+        for p in self.receiver.try_iter() {
+            packets.push(p);
+        }
+        for p in packets {
+            self.send_packet(p);
+        }
+    }
+
+    fn send_packet(&mut self, packet: Packet) {
         match packet {
+            Packet::LoginSuccess() => self.login_success(),
+
             Packet::Disconnect(reason) => self.disconnect(&reason)
         }
     }
@@ -275,7 +306,7 @@ impl Protocol {
         }
 
         self.client.write().unwrap().handle_login(username);
-        self.disconnect("Not implemented yet");
+        // self.disconnect("Not implemented yet");
     }
 
     fn handle_encryption_response(&mut self, mut rbuf: &[u8]) {
@@ -318,8 +349,11 @@ impl Protocol {
         {
             let client = self.client.read().unwrap();
 
-            wbuf.write_string("4566e69f-c907-48ee-8d71-d7ba5aa00d20").unwrap(); // TODO: UUID
-            wbuf.write_string(&client.get_username().unwrap()).unwrap(); // TODO
+            let uuid = client.get_uuid().unwrap();
+            let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
+
+            wbuf.write_string(&uuid_str).unwrap();
+            wbuf.write_string(&client.get_username().unwrap()).unwrap();
         }
 
         self.write_packet(&wbuf);

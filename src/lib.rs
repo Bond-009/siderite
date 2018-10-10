@@ -9,6 +9,7 @@ extern crate num_traits;
 #[macro_use]
 extern crate serde_json;
 extern crate rand;
+extern crate uuid;
 
 pub mod nbt;
 pub mod player;

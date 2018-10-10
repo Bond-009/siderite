@@ -1,13 +1,16 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex, RwLock};
-use std::{thread, time};
+use std::{thread};
 
 use openssl::pkey::Private;
 use openssl::rsa::Rsa;
+use serde_json as json;
+use uuid::Uuid;
 
 use client::Client;
 use protocol::Protocol;
 use protocol::authenticator::Authenticator;
+use protocol::thread::ProtocolThread;
 use world::World;
 
 pub struct ServerConfig {
@@ -47,7 +50,7 @@ impl Server {
             id: "-".to_owned(), // TODO: Generate random ID
 
             worlds: Vec::new(),
-            clients: Mutex::new(Vec::new()),    
+            clients: Mutex::new(Vec::new()),
 
             description: config.description,
             max_players: config.max_players,
@@ -63,14 +66,8 @@ impl Server {
     }
 
     pub fn start(svr: Arc<Server>) {
-        // Tick thread
-        let ticksvr = svr.clone();
-        thread::spawn(move || {
-            loop {
-                ticksvr.tick();
-                thread::sleep(time::Duration::from_millis(20));
-            }
-        });
+
+        let ps = ProtocolThread::start();
 
         let auth = Authenticator::start(svr.clone());
 
@@ -81,6 +78,7 @@ impl Server {
 
         for connection in listener.incoming() {
             let consvr = svr.clone();
+            let ps_c = ps.clone();
             let auth_c = auth.clone();
             thread::spawn(move || {
                 info!("Incomming connection!");
@@ -89,23 +87,14 @@ impl Server {
                     return;
                 }
 
-                let protsvr = consvr.clone();
                 let mut clients = consvr.clients.lock().unwrap();
-                let id = clients.len() as i32;
-
-                let client = Client::new(id, protsvr, stream, auth_c);
+                let client_id = clients.len() as i32;
+                let prot = Protocol::new(client_id, consvr.clone(), stream, auth_c);
+                let client = prot.get_client();
+                ps_c.send(prot).unwrap();
+                
                 clients.push(client);
             });
-        }
-    }
-
-    pub fn tick(&self) {
-        let mut clients = self.clients.lock().unwrap();
-        for mut client in clients.iter_mut() {
-            let prot_p = client.read().unwrap().get_protocol().unwrap();
-            let mut prot = prot_p.lock().unwrap();
-            prot.process_data();
-            prot.handle_in_packets();
         }
     }
 
@@ -115,5 +104,28 @@ impl Server {
             players += world.players.len();
         }
         players as i32
+    }
+
+    pub fn auth_user(&self, client_id: i32, username: String, uuid: Uuid, properties: json::Value) {
+        if self.online_players() >= self.max_players {
+            self.kick_user(client_id, "The server is currently full.");
+            return;
+        }
+
+        for client in self.clients.lock().unwrap().iter() {
+            if client.read().unwrap().id == client_id {
+                client.write().unwrap().auth(username, uuid, properties);
+                return;
+            }
+        }
+    }
+
+    pub fn kick_user(&self, client_id: i32, reason: &str) {
+        for client in self.clients.lock().unwrap().iter() {
+            if client.read().unwrap().id == client_id {
+                client.write().unwrap().kick(reason);
+                return;
+            }
+        }
     }
 }

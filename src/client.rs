@@ -1,34 +1,39 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
-use std::net::TcpStream;
 
-use protocol::Protocol;
+use uuid::Uuid;
+use serde_json as json;
+
 use protocol::authenticator::AuthInfo;
+use protocol::packets::Packet;
 use server::Server;
 
 pub struct Client {
-    id: i32,
+    pub id: i32,
     username: Option<String>,
+    uuid: Option<Uuid>,
+    properties: json::Value,
+
     server: Arc<Server>,
-    protocol: Option<Arc<Mutex<Protocol>>>,
+    protocol: Mutex<Sender<Packet>>,
     authenticator: Mutex<Sender<AuthInfo>>
 }
 
 impl Client {
 
-    pub fn new(id: i32, server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Arc<RwLock<Client>> {
-        let client = Client {
+    pub fn new(id: i32, server: Arc<Server>, protocol: Sender<Packet>, authenticator: Sender<AuthInfo>) -> Client {
+         Client {
             id: id,
             username: None,
-            server: server,
-            protocol: None,
-            authenticator: Mutex::new(authenticator)
-        };
-        let ts_client = Arc::new(RwLock::new(client));
-        ts_client.write().unwrap().set_protocol(Protocol::new(ts_client.clone(), stream));
-        ts_client
-    }
+            uuid: None,
+            properties: json::Value::Null,
 
+            server: server,
+            protocol: Mutex::new(protocol),
+            authenticator: Mutex::new(authenticator)
+        }
+    }
+    
     pub fn get_server(&self) -> Arc<Server> {
         self.server.clone()
     }
@@ -37,12 +42,13 @@ impl Client {
         self.username.clone()
     }
 
-    fn set_protocol(&mut self, protocol: Protocol) {
-        self.protocol = Some(Arc::new(Mutex::new(protocol)));
+    pub fn get_uuid(&self) -> Option<Uuid> {
+        self.uuid.clone()
     }
 
-    pub fn get_protocol(&self) -> Option<Arc<Mutex<Protocol>>> {
-        self.protocol.clone()
+    pub fn kick(&self, reason: &str) {
+        let packet = Packet::Disconnect(reason.to_string());
+        self.protocol.lock().unwrap().send(packet).unwrap();
     }
 
     pub fn handle_login(&mut self, username: String) {
@@ -52,5 +58,21 @@ impl Client {
             client_id: self.id,
             username: username
         }).unwrap();
+    }
+
+    pub fn auth(&mut self, username: String, uuid: Uuid, properties: json::Value) {
+        self.username = Some(username);
+
+        if self.uuid == None {
+            self.uuid = Some(uuid);
+        }
+
+        if self.properties == json::Value::Null {
+            self.properties = properties;
+        }
+
+        self.protocol.lock().unwrap().send(Packet::LoginSuccess()).unwrap();
+
+        // TODO: spawn player
     }
 }
