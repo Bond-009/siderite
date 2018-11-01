@@ -8,10 +8,11 @@ use serde_json as json;
 use uuid::Uuid;
 
 use client::Client;
+use entities::player::Player;
 use protocol::Protocol;
 use protocol::authenticator::Authenticator;
 use protocol::thread::ProtocolThread;
-use world::World;
+use world::*;
 
 pub struct ServerConfig {
     pub port: u16,
@@ -26,7 +27,7 @@ pub struct Server {
     pub id: String,
 
     // The first world in the vec is the default world
-    pub worlds: Vec<World>,
+    pub worlds: Vec<Arc<RwLock<World>>>,
     // Clients that aren't assigned a world yet
     clients: Mutex<Vec<Arc<RwLock<Client>>>>,
 
@@ -68,7 +69,6 @@ impl Server {
     pub fn start(svr: Arc<Server>) {
 
         let ps = ProtocolThread::start();
-
         let auth = Authenticator::start(svr.clone());
 
         let listener = TcpListener::bind(
@@ -87,6 +87,8 @@ impl Server {
                     return;
                 }
 
+                stream.set_nonblocking(true).expect("set_nonblocking call failed");
+
                 let mut clients = consvr.clients.lock().unwrap();
                 let client_id = clients.len() as i32;
                 let prot = Protocol::new(client_id, consvr.clone(), stream, auth_c);
@@ -98,10 +100,37 @@ impl Server {
         }
     }
 
+    pub fn load_worlds(&mut self) {
+        // TODO: change
+        self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
+            name: "Default".to_owned(),
+            dimension: Dimension::Overworld,
+            difficulty: Difficulty::Normal
+        }))));
+    }
+
+    pub fn try_load_player(&self, client_id: i32) -> Arc<RwLock<Player>>{
+        let client = self.get_client(client_id).unwrap();
+        // TODO: Try load player
+
+        let world = self.worlds[0].clone();
+        let player = Arc::new(RwLock::new(Player::new(client, world)));
+        return player;
+    }
+
+    fn get_client(&self, client_id: i32) -> Option<Arc<RwLock<Client>>> {
+        for client in self.clients.lock().unwrap().iter() {
+            if client.read().unwrap().id == client_id {
+                return Some(client.clone());
+            }
+        }
+        return None
+    }
+
     pub fn online_players(&self) -> i32 {
         let mut players = 0usize;
         for world in &self.worlds {
-            players += world.players.len();
+            players += world.read().unwrap().get_num_players();
         }
         players as i32
     }
@@ -111,13 +140,12 @@ impl Server {
             self.kick_user(client_id, "The server is currently full.");
             return;
         }
+        info!("Authenticated user {}", username);
 
-        for client in self.clients.lock().unwrap().iter() {
-            if client.read().unwrap().id == client_id {
-                client.write().unwrap().auth(username, uuid, properties);
-                return;
-            }
-        }
+        let client = self.get_client(client_id).unwrap();
+        client.write().unwrap().auth(username, uuid, properties);
+        let player = self.try_load_player(client_id);
+        client.read().unwrap().finish_auth(player);
     }
 
     pub fn kick_user(&self, client_id: i32, reason: &str) {

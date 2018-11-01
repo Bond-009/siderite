@@ -11,8 +11,8 @@ extern crate serde_json;
 extern crate rand;
 extern crate uuid;
 
-pub mod nbt;
-pub mod player;
+pub mod entities;
+pub mod mc_ext;
 pub mod server;
 pub mod world;
 

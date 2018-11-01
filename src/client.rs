@@ -1,9 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::Sender;
 
 use uuid::Uuid;
 use serde_json as json;
 
+use entities::player::Player;
 use protocol::authenticator::AuthInfo;
 use protocol::packets::Packet;
 use server::Server;
@@ -13,6 +14,8 @@ pub struct Client {
     username: Option<String>,
     uuid: Option<Uuid>,
     properties: json::Value,
+
+    _player: Option<Arc<RwLock<Player>>>,
 
     server: Arc<Server>,
     protocol: Mutex<Sender<Packet>>,
@@ -28,12 +31,14 @@ impl Client {
             uuid: None,
             properties: json::Value::Null,
 
+            _player: None,
+
             server: server,
             protocol: Mutex::new(protocol),
             authenticator: Mutex::new(authenticator)
         }
     }
-    
+
     pub fn get_server(&self) -> Arc<Server> {
         self.server.clone()
     }
@@ -72,7 +77,14 @@ impl Client {
         }
 
         self.protocol.lock().unwrap().send(Packet::LoginSuccess()).unwrap();
+    }
 
-        // TODO: spawn player
+    pub fn finish_auth(&self, player: Arc<RwLock<Player>>) {
+        let world = player.read().unwrap().get_world();
+        let prot = self.protocol.lock().unwrap();
+        prot.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
+        prot.send(Packet::SpawnPosition(world)).unwrap();
+        prot.send(Packet::ServerDifficulty()).unwrap();
+        prot.send(Packet::PlayerAbilities(player)).unwrap();
     }
 }

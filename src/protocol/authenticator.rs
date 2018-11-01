@@ -29,7 +29,7 @@ impl Authenticator {
 
     fn handle_request(server: Arc<Server>, info: AuthInfo) {
         if !server.authenticate {
-            // TODO: check if compatible with vanilla
+            // TODO: check if UUID is compatible with vanilla
             let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
             server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
         }
