@@ -32,8 +32,12 @@ impl Authenticator {
             // TODO: check if UUID is compatible with vanilla
             let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
             server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
+            return;
         }
 
         // TODO: auth
+        // FIXME: temp hack
+        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
+        server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
     }
 }

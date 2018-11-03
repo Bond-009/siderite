@@ -13,7 +13,7 @@ fn main() {
         description: "A custom MC server".to_string(),
         max_players: 100,
         favicon: String::new(),
-        authentication: false, // Set to true when auth is implemented
+        authentication: false,
     });
     server.load_worlds();
     let server_ref = Arc::new(server);

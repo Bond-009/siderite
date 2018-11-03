@@ -10,7 +10,7 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use circbuf::CircBuf;
 use openssl::rsa::Padding;
-use openssl::symm::{encrypt, Cipher};
+use openssl::symm::{encrypt, decrypt, Cipher};
 use num_traits::FromPrimitive;
 use rand::{thread_rng, Rng};
 use uuid::adapter::Hyphenated;
@@ -64,7 +64,7 @@ impl Protocol {
 
             encrypted: false,
             verify_token: arr,
-            cipher: Cipher::aes_128_cfb128(),
+            cipher: Cipher::aes_128_cfb8(), // AES/CFB8 stream cipher.
             encryption_key: Vec::new(), // [0u8; 16]
         }
     }
@@ -102,7 +102,6 @@ impl Protocol {
         let len = match self.stream.peek(&mut tmp) {
             Ok(v) => v,
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                debug!("return, would block");
                 // return, we don't want to block the protocols thread
                 return;
             }
@@ -115,23 +114,13 @@ impl Protocol {
             return;
         }
 
+        let mut vec = vec![0u8; len];
+        self.stream.read(&mut vec).unwrap();
+
         if self.encrypted {
-            unimplemented!();
-            /*
-            let mut vec = vec![0u8; len];
-            self.stream.read(&mut vec).unwrap();
-            let mut dvec = decrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
-            self.received_data.write(&dvec).unwrap();
-            */
+            vec = decrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
         }
-        else {
-            let mut vec = vec![0u8; len];
-            self.stream.read(&mut vec).unwrap();
-
-            // debug!("{}", util::array_as_hex(&vec)); // Full rec data dump
-
-            self.received_data.write(&vec).unwrap();
-        }
+        self.received_data.write(&vec).unwrap();
     }
 
     pub fn handle_in_packets(&mut self) {
@@ -208,6 +197,7 @@ impl Protocol {
             State::Play => {
                 match id {
                     0x00 => self.handle_keep_alive(rbuf),
+                    0x01 => self.handle_chat_message(rbuf),
                     0x03 => self.handle_player(rbuf),
                     0x04 => self.handle_player_pos(rbuf),
                     0x05 => self.handle_player_look(rbuf),
@@ -246,12 +236,13 @@ impl Protocol {
     }
 
     fn write_packet(&mut self, mut rbuf: &[u8]) {
-        let lenght = rbuf.len() as i32;
-        debug!("Write packet: len {}, id: {:#X}", lenght, rbuf.first().unwrap());
-        let mut vec = Vec::with_capacity(rbuf.len() + 4);
-        vec.write_var_int(lenght).unwrap(); // Write packet lenght
+        let lenght = rbuf.len();
+        debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, lenght, rbuf.first().unwrap());
+        let mut vec = Vec::with_capacity(lenght + 4);
+        vec.write_var_int(lenght as i32).unwrap(); // Write packet lenght
         vec.write_all(&mut rbuf).unwrap(); // Write packet data
 
+        // TODO: don't encrypt per packet
         if self.encrypted {
             vec = encrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
         }
@@ -262,7 +253,7 @@ impl Protocol {
 
     fn handle_handschake(&mut self, mut rbuf: &[u8]) {
         let proto_v = rbuf.read_var_int().unwrap();
-        debug_assert_eq!(proto_v, 47);
+        assert_eq!(proto_v, 47);
         let _server_address = rbuf.read_string().unwrap();
         let _server_port = rbuf.read_ushort().unwrap();
         let next_state = rbuf.read_var_int().unwrap();
@@ -273,6 +264,8 @@ impl Protocol {
     // Status packets:
 
     fn handle_request(&mut self) {
+        assert_eq!(self.state, State::Status);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x00).unwrap();
         // TODO: Add sample
@@ -304,6 +297,8 @@ impl Protocol {
     }
 
     fn handle_ping(&mut self, mut rbuf: &[u8]) {
+        assert_eq!(self.state, State::Status);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap();
         let payload = rbuf.read_long().unwrap();
@@ -319,57 +314,87 @@ impl Protocol {
         debug!("Player name: {}", username);
 
         if self.server.authenticate {
-            let mut wbuf = Vec::new();
-            wbuf.write_var_int(0x01).unwrap(); // Encryption Request packet
-            wbuf.write_string(&self.server.id).unwrap();
-            // Public Key
-            wbuf.write_var_int(self.server.public_key_der.len() as i32).unwrap();
-            wbuf.write_all(&self.server.public_key_der).unwrap();
-            // Verify Token
-            wbuf.write_var_int(self.verify_token.len() as i32).unwrap();
-            wbuf.write_all(&self.verify_token).unwrap();
+            self.encryption_request();
 
-            self.write_packet(&wbuf);
+            self.client.write().unwrap().username = Some(username);
         }
-
-        self.client.write().unwrap().handle_login(username);
-        // self.disconnect("Not implemented yet");
+        else {
+            self.client.write().unwrap().handle_login(username);
+        }
     }
 
     fn handle_encryption_response(&mut self, mut rbuf: &[u8]) {
-        // Public Key
-        let ss_len = rbuf.read_var_int().unwrap();
+        let ss_len = rbuf.read_var_int().unwrap(); // Shared Secret Key Length
+        debug!("ss_len {}", ss_len);
         let mut ssarr = vec![0u8; ss_len as usize];
-        rbuf.read(&mut ssarr).unwrap();
-        // Verify Token
-        let vt_len = rbuf.read_var_int().unwrap();
+        rbuf.read(&mut ssarr).unwrap(); // Shared Secret
+        
+        let vt_len = rbuf.read_var_int().unwrap(); // Verify Token Length
+        debug!("vt_len {}", vt_len);
         let mut vtarr = vec![0u8; vt_len as usize];
-        rbuf.read(&mut vtarr).unwrap();
+        rbuf.read(&mut vtarr).unwrap(); // Verify Token
 
+        // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; 128];
-        self.server.private_key.private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
+        let vtd_len = self.server.private_key.private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
+        debug!("vtdvec {}", vtd_len);
 
-        if vtdvec != self.verify_token {
+        if vtd_len != self.verify_token.len() {
+            self.disconnect("Bad nonce length");
+            return;
+        }
+        vtdvec.truncate(vtd_len);
+
+        if &vtdvec[..] != &self.verify_token[..] {
             self.disconnect("Hacked client");
             return;
         }
 
+        // Decrypt Shared Secret Key
         let mut ssdvec = vec![0; 128];
-        self.server.private_key.private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
+        let ssd_len = self.server.private_key.private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
+        if ssd_len != 16 {
+            self.disconnect("Bad key length");
+            return;
+        }
+        ssdvec.truncate(ssd_len);
 
+        // Enables AES/CFB8 encryption
+        self.encryption_key = ssdvec;
         self.encrypted = true;
-        self.encryption_key = ssarr;
 
-        self.login_success();
+        // Send 
+        let mut client = self.client.write().unwrap();
+        let username = client.username.clone().unwrap();
+        client.handle_login(username);
+    }
+
+    fn encryption_request(&mut self) {
+        assert_eq!(self.state, State::Login);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x01).unwrap(); // Encryption Request packet
+        wbuf.write_string(&self.server.id).unwrap();
+        // Public Key
+        wbuf.write_var_int(self.server.public_key_der.len() as i32).unwrap();
+        wbuf.write_all(&self.server.public_key_der).unwrap();
+        // Verify Token
+        wbuf.write_var_int(self.verify_token.len() as i32).unwrap();
+        wbuf.write_all(&self.verify_token).unwrap();
+
+        self.write_packet(&wbuf);
     }
 
     fn login_success(&mut self) {
         assert_eq!(self.state, State::Login);
 
+        // TODO: option to enable compression
+
         self.state = State::Play;
+        debug!("Changed State to {:?}", self.state);
 
         let mut wbuf = Vec::new();
-        wbuf.write_var_int(0x02).unwrap(); // Login packet
+        wbuf.write_var_int(0x02).unwrap(); // Login Success packet
 
         {
             let client = self.client.read().unwrap();
@@ -378,8 +403,20 @@ impl Protocol {
             let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
 
             wbuf.write_string(&uuid_str).unwrap();
-            wbuf.write_string(&client.get_username().unwrap()).unwrap();
+            wbuf.write_string(&client.username.clone().unwrap()).unwrap();
         }
+
+        self.write_packet(&wbuf);
+    }
+
+    fn _login_set_compression(&mut self) {
+        assert_eq!(self.state, State::Login);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x03).unwrap(); // Login Success packet
+
+        // Maximum size of a packet before its compressed 
+        wbuf.write_var_int(256).unwrap(); // Threshold
 
         self.write_packet(&wbuf);
     }
@@ -389,6 +426,14 @@ impl Protocol {
     fn handle_keep_alive(&mut self, mut rbuf: &[u8]) {
         let _id = rbuf.read_var_int().unwrap();
         // TODO: Keep alive
+    }
+
+    fn handle_chat_message(&mut self, mut rbuf: &[u8]) {
+        let msg = rbuf.read_string().unwrap();
+        if msg.starts_with('/') {
+            // Exec cmd
+        }
+        info!("{}", msg);
     }
 
     /// This packet is used to indicate whether the player is on ground (walking/swimming),
@@ -463,6 +508,8 @@ impl Protocol {
     }
 
     fn join_game(&mut self, player: Arc<RwLock<Player>>, world: Arc<RwLock<World>>) {
+        assert_eq!(self.state, State::Play);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Join Game packet
 
@@ -486,6 +533,8 @@ impl Protocol {
     }
 
     fn spawn_position(&mut self, _world: Arc<RwLock<World>>) {
+        assert_eq!(self.state, State::Play);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x05).unwrap(); // Spawn Position packet
 
@@ -496,6 +545,8 @@ impl Protocol {
     }
 
     fn player_abilities(&mut self, player: Arc<RwLock<Player>>) {
+        assert_eq!(self.state, State::Play);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x39).unwrap(); // Player Abilities packet
 
@@ -528,6 +579,8 @@ impl Protocol {
 
     /// Changes the difficulty setting in the client's option menu
     fn server_difficulty(&mut self) {
+        assert_eq!(self.state, State::Play);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x41).unwrap(); // Server Difficulty
 
@@ -547,6 +600,9 @@ impl Protocol {
                 _ => panic!("Unknown state for Disconnect Packet: {:?}", self.state)
             }
         ).unwrap(); // Disconnect packet
+
+        info!("Kicking with reason: '{}'", reason);
+
         let reason = json!({
             "text": reason
         });

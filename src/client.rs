@@ -11,7 +11,7 @@ use server::Server;
 
 pub struct Client {
     pub id: i32,
-    username: Option<String>,
+    pub username: Option<String>,
     uuid: Option<Uuid>,
     properties: json::Value,
 
@@ -41,10 +41,6 @@ impl Client {
 
     pub fn get_server(&self) -> Arc<Server> {
         self.server.clone()
-    }
-
-    pub fn get_username(&self) -> Option<String> {
-        self.username.clone()
     }
 
     pub fn get_uuid(&self) -> Option<Uuid> {
