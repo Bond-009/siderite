@@ -20,6 +20,7 @@ path = "src/lib.rs"
 byteorder = "1.2.7"
 circbuf = "0.1.4"
 env_logger = "0.5.13"
+hex = "0.3.2"
 log = "0.4.6"
 openssl = "0.10.15"
 num-derive = "0.2"
@@ -30,3 +31,6 @@ serde_json = "1.0.32"
 [dependencies.uuid]
 version = "0.7"
 features = ["v3"]
+
+[dependencies.mojang]
+git = "https://gitlab.com/siderite/mojang-rs.git"

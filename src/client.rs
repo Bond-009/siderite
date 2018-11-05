@@ -5,7 +5,6 @@ use uuid::Uuid;
 use serde_json as json;
 
 use entities::player::Player;
-use protocol::authenticator::AuthInfo;
 use protocol::packets::Packet;
 use server::Server;
 
@@ -19,12 +18,11 @@ pub struct Client {
 
     server: Arc<Server>,
     protocol: Mutex<Sender<Packet>>,
-    authenticator: Mutex<Sender<AuthInfo>>
 }
 
 impl Client {
 
-    pub fn new(id: i32, server: Arc<Server>, protocol: Sender<Packet>, authenticator: Sender<AuthInfo>) -> Client {
+    pub fn new(id: i32, server: Arc<Server>, protocol: Sender<Packet>) -> Client {
          Client {
             id: id,
             username: None,
@@ -35,7 +33,6 @@ impl Client {
 
             server: server,
             protocol: Mutex::new(protocol),
-            authenticator: Mutex::new(authenticator)
         }
     }
 
@@ -50,15 +47,6 @@ impl Client {
     pub fn kick(&self, reason: &str) {
         let packet = Packet::Disconnect(reason.to_string());
         self.protocol.lock().unwrap().send(packet).unwrap();
-    }
-
-    pub fn handle_login(&mut self, username: String) {
-        self.username = Some(username.clone());
-
-        self.authenticator.lock().unwrap().send(AuthInfo {
-            client_id: self.id,
-            username: username
-        }).unwrap();
     }
 
     pub fn auth(&mut self, username: String, uuid: Uuid, properties: json::Value) {

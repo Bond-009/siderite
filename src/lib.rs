@@ -1,8 +1,10 @@
 extern crate byteorder;
 extern crate circbuf;
+extern crate hex;
 #[macro_use]
 extern crate log;
 extern crate openssl;
+extern crate mojang;
 #[macro_use]
 extern crate num_derive;
 extern crate num_traits;

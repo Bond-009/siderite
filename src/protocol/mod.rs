@@ -4,19 +4,20 @@ pub mod thread;
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::sync::{Arc, RwLock};
-use std::sync::mpsc;
+use std::sync::{Arc, RwLock, mpsc};
 use std::sync::mpsc::{Receiver, Sender};
 
 use circbuf::CircBuf;
 use openssl::rsa::Padding;
+use openssl::sha;
 use openssl::symm::{encrypt, decrypt, Cipher};
 use num_traits::FromPrimitive;
 use rand::{thread_rng, Rng};
 use uuid::adapter::Hyphenated;
 
-use self::packets::Packet;
 use self::authenticator::AuthInfo;
+use self::packets::Packet;
+
 use client::Client;
 use entities::player::{GameMode, Player};
 use mc_ext::{MCReadExt, MCWriteExt};
@@ -35,6 +36,7 @@ enum State {
 pub struct Protocol {
     server: Arc<Server>,
     client: Arc<RwLock<Client>>,
+    authenticator: Sender<AuthInfo>,
     receiver: Receiver<Packet>,
 
     stream: TcpStream,
@@ -44,7 +46,7 @@ pub struct Protocol {
     encrypted: bool,
     verify_token: [u8; 4],
     cipher: Cipher,
-    encryption_key: Vec<u8>, //[u8; 16]
+    encryption_key: [u8; 16]
 }
 
 impl Protocol {
@@ -55,8 +57,9 @@ impl Protocol {
         let (tx, rx) = mpsc::channel();
         Protocol {
             server: server.clone(),
-            client: Arc::new(RwLock::new(Client::new(client_id, server, tx, authenticator))), // TODO: client id
+            client: Arc::new(RwLock::new(Client::new(client_id, server, tx))), // TODO: proper client id
             receiver: rx,
+            authenticator: authenticator,
 
             stream: stream,
             state: State::HandSchaking,
@@ -65,7 +68,7 @@ impl Protocol {
             encrypted: false,
             verify_token: arr,
             cipher: Cipher::aes_128_cfb8(), // AES/CFB8 stream cipher.
-            encryption_key: Vec::new(), // [0u8; 16]
+            encryption_key: [0u8; 16]
         }
     }
 
@@ -319,23 +322,27 @@ impl Protocol {
             self.client.write().unwrap().username = Some(username);
         }
         else {
-            self.client.write().unwrap().handle_login(username);
+            self.authenticator.send(AuthInfo {
+                client_id: self.client.read().unwrap().id,
+                username: username,
+                server_id: None
+            }).unwrap();
         }
     }
 
     fn handle_encryption_response(&mut self, mut rbuf: &[u8]) {
-        let ss_len = rbuf.read_var_int().unwrap(); // Shared Secret Key Length
+        let ss_len = rbuf.read_var_int().unwrap() as usize; // Shared Secret Key Length
         debug!("ss_len {}", ss_len);
-        let mut ssarr = vec![0u8; ss_len as usize];
+        let mut ssarr = vec![0u8; ss_len];
         rbuf.read(&mut ssarr).unwrap(); // Shared Secret
         
-        let vt_len = rbuf.read_var_int().unwrap(); // Verify Token Length
+        let vt_len = rbuf.read_var_int().unwrap() as usize; // Verify Token Length
         debug!("vt_len {}", vt_len);
-        let mut vtarr = vec![0u8; vt_len as usize];
+        let mut vtarr = vec![0u8; vt_len];
         rbuf.read(&mut vtarr).unwrap(); // Verify Token
 
         // Decrypt the and verify the Verify Token
-        let mut vtdvec = vec![0; 128];
+        let mut vtdvec = vec![0; vt_len];
         let vtd_len = self.server.private_key.private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
         debug!("vtdvec {}", vtd_len);
 
@@ -343,30 +350,39 @@ impl Protocol {
             self.disconnect("Bad nonce length");
             return;
         }
-        vtdvec.truncate(vtd_len);
 
-        if &vtdvec[..] != &self.verify_token[..] {
+        if &vtdvec[..vtd_len] != &self.verify_token[..] {
             self.disconnect("Hacked client");
             return;
         }
 
         // Decrypt Shared Secret Key
-        let mut ssdvec = vec![0; 128];
+        let mut ssdvec = vec![0; ss_len];
         let ssd_len = self.server.private_key.private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
         if ssd_len != 16 {
             self.disconnect("Bad key length");
             return;
         }
-        ssdvec.truncate(ssd_len);
 
         // Enables AES/CFB8 encryption
-        self.encryption_key = ssdvec;
+        self.encryption_key.copy_from_slice(&ssdvec[..16]);
         self.encrypted = true;
 
-        // Send 
-        let mut client = self.client.write().unwrap();
+        let mut hasher = sha::Sha1::new();
+        hasher.update(self.server.id.as_bytes());
+        hasher.update(&self.encryption_key);
+        hasher.update(&self.server.public_key_der);
+        let hash = hasher.finish();
+        let server_id = authenticator::java_hex_digest(hash);
+
+        let client = self.client.write().unwrap();
         let username = client.username.clone().unwrap();
-        client.handle_login(username);
+
+        self.authenticator.send(AuthInfo {
+                client_id: client.id,
+                username: username,
+                server_id: Some(server_id)
+            }).unwrap();
     }
 
     fn encryption_request(&mut self) {
@@ -401,6 +417,8 @@ impl Protocol {
 
             let uuid = client.get_uuid().unwrap();
             let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
+            debug!("uuid: {}", uuid_str);
+            debug!("name: {}", client.username.clone().unwrap());
 
             wbuf.write_string(&uuid_str).unwrap();
             wbuf.write_string(&client.username.clone().unwrap()).unwrap();
@@ -523,7 +541,7 @@ impl Protocol {
             wbuf.write_byte(w.get_dimension() as i8).unwrap(); // Dimension
             wbuf.write_ubyte(w.get_difficulty() as u8).unwrap(); // Difficulty
         }
-        let max_players = self.client.read().unwrap().get_server().max_players;
+        let max_players = self.server.max_players;
 
         wbuf.write_ubyte(max_players as u8).unwrap(); // Max players
         wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
@@ -582,9 +600,8 @@ impl Protocol {
         assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
-        wbuf.write_var_int(0x41).unwrap(); // Server Difficulty
+        wbuf.write_var_int(0x41).unwrap(); // Server Difficulty packet
 
-        // TODO: Write difficulty
         wbuf.write_ubyte(Difficulty::Normal as u8).unwrap(); // Difficulty
 
         self.write_packet(&wbuf);
