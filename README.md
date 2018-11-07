@@ -8,7 +8,7 @@ State       | Status
 ------------|-------
 Handshaking | Works
 Status      | Works, but sends no favicon and a dummy sample
-Login       | Works, but doesn't authentication the user
+Login       | Works, but encryption seems borked
 Play        | Handles just enough packets to not crash
 
 [travis-ci-badge]: https://travis-ci.org/Bond-009/siderite.svg?branch=master
