@@ -7,6 +7,8 @@ use serde_json as json;
 use entities::player::Player;
 use protocol::packets::Packet;
 use server::Server;
+use storage::chunk::*;
+use storage::chunk::section::Section;
 
 pub struct Client {
     pub id: i32,
@@ -66,9 +68,48 @@ impl Client {
     pub fn finish_auth(&self, player: Arc<RwLock<Player>>) {
         let world = player.read().unwrap().get_world();
         let prot = self.protocol.lock().unwrap();
+
         prot.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
-        prot.send(Packet::SpawnPosition(world)).unwrap();
+        prot.send(Packet::SpawnPosition(world.clone())).unwrap();
         prot.send(Packet::ServerDifficulty()).unwrap();
-        prot.send(Packet::PlayerAbilities(player)).unwrap();
+        prot.send(Packet::PlayerAbilities(player.clone())).unwrap();
+
+        let chunk = ChunkColumn {
+            sections: [
+                Some(Section {
+                    block_types: [3; SECTION_BLOCK_COUNT],
+                    block_metas: [0; SECTION_BLOCK_COUNT / 2],
+                    block_light: [15; SECTION_BLOCK_COUNT / 2],
+                    block_sky_light: [15; SECTION_BLOCK_COUNT / 2]
+                }),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None
+            ]
+        };
+        let primary_bit_mask = chunk.get_primary_bit_mask();
+        let mut data = Vec::with_capacity(chunk.serialized_size() + 4);
+        chunk.serialize(&mut data);
+
+        for x in -3..3 {
+            for z in -3..3 {
+                prot.send(Packet::ChunkData(x, z, primary_bit_mask, data.clone())).unwrap();
+            }
+        }
+
+        prot.send(Packet::TimeUpdate(world.clone())).unwrap();
+        prot.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
     }
 }
