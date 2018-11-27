@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use client::Client;
-use world::World;
+use storage::world::World;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
@@ -29,7 +29,7 @@ impl Player {
             world: world,
 
             _health: MAX_HEATH,
-            gamemode: GameMode::Spectator // TODO: change
+            gamemode: GameMode::Creative // TODO: change
         }
     }
 

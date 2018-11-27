@@ -12,7 +12,7 @@ use entities::player::Player;
 use protocol::Protocol;
 use protocol::authenticator::Authenticator;
 use protocol::thread::ProtocolThread;
-use world::*;
+use storage::world::*;
 
 pub struct ServerConfig {
     pub port: u16,
@@ -48,7 +48,9 @@ impl Server {
     pub fn new(config: ServerConfig) -> Server {
         let rsa = Rsa::generate(1024).unwrap();
         Server {
-            id: "-".to_owned(), // TODO: Generate random ID
+            // MC Update (1.7.x): The server ID is now sent as an empty string.
+            // Hashes also utilize the public key, so they will still be correct.
+            id: "".to_owned(),
 
             worlds: Vec::new(),
             clients: Mutex::new(Vec::new()),

@@ -25,13 +25,14 @@ impl ProtocolThread {
     }
 
     fn tick(prots: &mut Vec<Protocol>, rx: &Receiver<Protocol>) {
+        prots.retain(|x| !x.is_disconnected()); // TODO: destroy clients
+
         for prot in rx.try_iter() {
             prots.push(prot);
         }
 
         for prot in prots {
             prot.process_data();
-            prot.handle_in_packets();
             prot.handle_out_packets();
         }
     }

@@ -1,6 +1,7 @@
 pub mod authenticator;
 pub mod packets;
 pub mod thread;
+pub mod v47;
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -22,7 +23,10 @@ use client::Client;
 use entities::player::{GameMode, Player};
 use mc_ext::{MCReadExt, MCWriteExt};
 use server::Server;
-use world::{Difficulty, World};
+use storage::world::{Difficulty, World};
+
+const VERIFY_TOKEN_LEN: usize = 4;
+const ENCRYPTION_KEY_LEN: usize = 16;
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
@@ -30,7 +34,34 @@ enum State {
     HandSchaking = 0x00,
     Status = 0x01,
     Login = 0x02,
-    Play = 0x03
+    Play = 0x03,
+    Disconnected = 0xFF
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
+pub enum GameStateReason {
+    /// Bed can't be used as a spawn point
+    InvalidBed = 0,
+    EndRaining = 1,
+    BeginRaining = 2,
+    /// 0: Survival, 1: Creative, 2: Adventure, 3: Spectator
+    ChangeGameMode = 3,
+    EnterCredits = 4,
+    /// 0: Show welcome to demo screen,
+    /// 101: Tell movement controls,
+    /// 102: Tell jump control,
+    /// 103: Tell inventory control
+    DemoMessage = 5,
+    /// Appears to be played when an arrow strikes another player in Multiplayer
+    ArrowHittingPlayer = 6,
+    /// The current darkness value. 1 = Dark, 0 = Bright,
+    /// Setting the value higher causes the game to change color and freeze
+    FadeValue = 7,
+    /// Time in ticks for the sky to fade
+    FadeTime = 8,
+    /// Unknown
+    PlayMobAppearance = 10,
 }
 
 pub struct Protocol {
@@ -44,15 +75,15 @@ pub struct Protocol {
     received_data: CircBuf,
 
     encrypted: bool,
-    verify_token: [u8; 4],
+    verify_token: [u8; VERIFY_TOKEN_LEN],
     cipher: Cipher,
-    encryption_key: [u8; 16]
+    encryption_key: [u8; ENCRYPTION_KEY_LEN]
 }
 
 impl Protocol {
 
     pub fn new(client_id: i32, server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Protocol {
-        let mut arr = [0u8; 4];
+        let mut arr = [0u8; VERIFY_TOKEN_LEN];
         thread_rng().fill(&mut arr[..]);
         let (tx, rx) = mpsc::channel();
         Protocol {
@@ -68,12 +99,16 @@ impl Protocol {
             encrypted: false,
             verify_token: arr,
             cipher: Cipher::aes_128_cfb8(), // AES/CFB8 stream cipher.
-            encryption_key: [0u8; 16]
+            encryption_key: [0u8; ENCRYPTION_KEY_LEN]
         }
     }
 
     pub fn get_client(&self) -> Arc<RwLock<Client>> {
         self.client.clone()
+    }
+
+    pub fn is_disconnected(&self) -> bool {
+        self.state == State::Disconnected
     }
 
     /// Checks if the first packet is a legacy ping packet (MC v1.4 - 1.6)
@@ -108,12 +143,13 @@ impl Protocol {
                 // return, we don't want to block the protocols thread
                 return;
             }
-            Err(e) => panic!("encountered IO error: {}", e),
+            Err(e) => panic!("Encountered IO error: {}", e),
         };
         drop(tmp);
 
         if len == 0 {
-            // Nothing to read, return
+            // Connection closed
+            self.state = State::Disconnected;
             return;
         }
 
@@ -124,9 +160,10 @@ impl Protocol {
             vec = decrypt(self.cipher, &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
         }
         self.received_data.write(&vec).unwrap();
+        self.handle_in_packets();
     }
 
-    pub fn handle_in_packets(&mut self) {
+    fn handle_in_packets(&mut self) {
         loop {
             if self.received_data.len() == 0 {
                 // No data
@@ -135,15 +172,9 @@ impl Protocol {
 
             let lenght = match self.received_data.read_var_int() {
                 Ok(value) => value as usize,
-                Err(error) => {
-                    if error.kind() == ErrorKind::UnexpectedEof {
-                        info!("Connection terminated");
-                        return;
-                    }
-                    else {
-                        debug!("Not enough data");
-                        return; // Not enough data
-                    }
+                Err(_) => {
+                    debug!("Not enough data");
+                    return; // Not enough data
                 }
             };
 
@@ -154,19 +185,7 @@ impl Protocol {
             }
 
             let mut rbuf = vec![0u8; lenght];
-            match self.received_data.read(&mut rbuf).err() {
-                Some(error) => {
-                    if error.kind() == ErrorKind::UnexpectedEof {
-                        println!("UnexpectedEof!");
-                        return;
-                    }
-                    else {
-                        println!("Err: {}", error);
-                        return;
-                    }
-                }
-                _ => ()
-            }
+            self.received_data.read(&mut rbuf).unwrap();
 
             let mut slice = &rbuf[..];
             let id = slice.read_var_int().unwrap();
@@ -180,21 +199,21 @@ impl Protocol {
             State::HandSchaking => {
                 match id {
                     0x00 => self.handle_handschake(rbuf),
-                    _ => panic!("Unknown packet: {:#X}, state: {:?}", id, self.state)
+                    _ => self.unknown_packet(id, rbuf)
                 }
             }
             State::Status => {
                 match id {
                     0x00 => self.handle_request(),
                     0x01 => self.handle_ping(rbuf),
-                    _ => panic!("Unknown packet: {:#X}, state: {:?}", id, self.state)
+                    _ => self.unknown_packet(id, rbuf)
                 }
             }
             State::Login => {
                 match id {
                     0x00 => self.handle_login_start(rbuf),
                     0x01 => self.handle_encryption_response(rbuf),
-                    _ => panic!("Unknown packet: {:#X}, state: {:?}", id, self.state)
+                    _ => self.unknown_packet(id, rbuf)
                 }
             }
             State::Play => {
@@ -206,11 +225,19 @@ impl Protocol {
                     0x05 => self.handle_player_look(rbuf),
                     0x06 => self.handle_player_pos_look(rbuf),
                     0x15 => self.handle_client_settings(rbuf),
+                    0x16 => self.handle_client_status(rbuf),
                     0x17 => self.handle_plugin_message(rbuf),
-                    _ => panic!("Unknown packet: {:#X}, state: {:?}", id, self.state)
+                    0x0B => self.handle_entity_action(rbuf),
+                    _ => self.unknown_packet(id, rbuf)
                 }
             }
+            State::Disconnected => return // Ignore all packets
         }
+    }
+
+    fn unknown_packet(&mut self, id: i32, _rbuf: &[u8]) {
+        error!("Unknown packet: {:#X}, state: {:?}", id, self.state);
+        self.disconnect(&format!("Unknown packet: {:#X}", id));
     }
 
     // Out:
@@ -227,14 +254,18 @@ impl Protocol {
 
     fn send_packet(&mut self, packet: Packet) {
         match packet {
-            Packet::LoginSuccess()          => self.login_success(),
+            Packet::LoginSuccess()                 => self.login_success(),
 
-            Packet::JoinGame(player, world) => self.join_game(player, world),
-            Packet::SpawnPosition(world)    => self.spawn_position(world),
-            Packet::PlayerAbilities(player) => self.player_abilities(player),
-            Packet::ServerDifficulty()      => self.server_difficulty(),
+            Packet::JoinGame(player, world)        => self.join_game(player, world),
+            Packet::TimeUpdate(world)              => self.time_update(world),
+            Packet::SpawnPosition(world)           => self.spawn_position(world),
+            Packet::PlayerPositionAndLook(player)  => self.player_pos_look(player),
+            Packet::PlayerAbilities(player)        => self.player_abilities(player),
+            Packet::ChunkData(x, z, primary_bit_mask, data) => self.chunk_data(x, z, primary_bit_mask, &data),
+            Packet::ServerDifficulty()             => self.server_difficulty(Difficulty::Normal), // TODO: change
+            Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
 
-            Packet::Disconnect(reason)      => self.disconnect(&reason)
+            Packet::Disconnect(reason)             => self.disconnect(&reason)
         }
     }
 
@@ -271,9 +302,7 @@ impl Protocol {
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x00).unwrap();
-        // TODO: Add sample
-        // TODO: Add favicon
-        // TODO
+        // TODO: Add favicon and sample
         let response = json!({
             "version": {
                 "name": "1.8.9",
@@ -291,7 +320,7 @@ impl Protocol {
             },
             "description": {
                 "text": self.server.description,
-            }
+            },
             //"favicon": "data:image/png;base64,"
         });
         let strres = response.to_string();
@@ -314,7 +343,6 @@ impl Protocol {
 
     fn handle_login_start(&mut self, mut rbuf: &[u8]) {
         let username = rbuf.read_string().unwrap();
-        debug!("Player name: {}", username);
 
         if self.server.authenticate {
             self.encryption_request();
@@ -344,14 +372,14 @@ impl Protocol {
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
         let vtd_len = self.server.private_key.private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
-        debug!("vtdvec {}", vtd_len);
-
-        if vtd_len != self.verify_token.len() {
-            self.disconnect("Bad nonce length");
+        if vtd_len != VERIFY_TOKEN_LEN {
+            debug!("Verify Token is the wrong length: expected {}, got {}", VERIFY_TOKEN_LEN, vtd_len);
+            self.disconnect("Hacked client");
             return;
         }
 
-        if &vtdvec[..vtd_len] != &self.verify_token[..] {
+        if &vtdvec[..VERIFY_TOKEN_LEN] != &self.verify_token[..] {
+            debug!("Verify Token is not the same");
             self.disconnect("Hacked client");
             return;
         }
@@ -359,13 +387,14 @@ impl Protocol {
         // Decrypt Shared Secret Key
         let mut ssdvec = vec![0; ss_len];
         let ssd_len = self.server.private_key.private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
-        if ssd_len != 16 {
-            self.disconnect("Bad key length");
+        if ssd_len != ENCRYPTION_KEY_LEN {
+            debug!("Shared Secret Key is the wrong length: expected {}, got {}", ENCRYPTION_KEY_LEN, ssd_len);
+            self.disconnect("Hacked client");
             return;
         }
 
         // Enables AES/CFB8 encryption
-        self.encryption_key.copy_from_slice(&ssdvec[..16]);
+        self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
         self.encrypted = true;
 
         let mut hasher = sha::Sha1::new();
@@ -441,11 +470,16 @@ impl Protocol {
 
     // Play packets:
 
+    /// The server will frequently send out a keep-alive, each containing a random ID.
+    /// The client must respond with the same packet.
     fn handle_keep_alive(&mut self, mut rbuf: &[u8]) {
         let _id = rbuf.read_var_int().unwrap();
         // TODO: Keep alive
     }
 
+    /// Check the message to see if it begins with a '/'.
+    /// If it does, the server assumes it to be a command and attempts to process it.
+    /// If it doesn't, the username of the sender is prepended and sent to all clients.
     fn handle_chat_message(&mut self, mut rbuf: &[u8]) {
         let msg = rbuf.read_string().unwrap();
         if msg.starts_with('/') {
@@ -461,6 +495,7 @@ impl Protocol {
         debug!("On Ground: {}", on_ground);
     }
 
+    /// Updates the player's XYZ position on the server.
     fn handle_player_pos(&mut self, mut rbuf: &[u8]) {
         // Feet pos
         let x = rbuf.read_double().unwrap();
@@ -471,6 +506,7 @@ impl Protocol {
         debug!("On Ground: {}", on_ground);
     }
 
+    /// Updates the direction the player is looking in.
     fn handle_player_look(&mut self, mut rbuf: &[u8]) {
         let _yaw = rbuf.read_float().unwrap();
         let _pitch = rbuf.read_float().unwrap();
@@ -478,9 +514,9 @@ impl Protocol {
         debug!("On Ground: {}", on_ground);
     }
 
-    /// Sent when the player connects, or when settings are changed.
+    /// A combination of Player Look and Player Position.
     fn handle_player_pos_look(&mut self, mut rbuf: &[u8]) {
-        // TODO: Do something with the settings
+        // TODO: Do something
         // Feet pos
         let x = rbuf.read_double().unwrap();
         let y = rbuf.read_double().unwrap();
@@ -515,6 +551,27 @@ impl Protocol {
         let _skin_parts = rbuf.read_ubyte().unwrap();
     }
 
+    /// Sent when the client is ready to complete login and when the client is ready to respawn after death.
+    fn handle_client_status(&mut self, mut rbuf: &[u8]) {
+        let action_id = rbuf.read_var_int().unwrap(); // Action ID
+
+        // Action ID | Action
+        // ----------------------------------------
+        // 0         | Perform respawn
+        // 1         | Request stats
+        // 2         | Taking Inventory achievement
+
+        match action_id {
+            0 => (), // TODO: respawn
+            1 => (), // TODO: Stats
+            2 => (), // TODO // Taking Inventory achievement 
+            _ => {
+                error!("Action ID is out of range (0..2), got {}", action_id);
+                self.disconnect("Hacked client");
+            }
+        }
+    }
+
     /// Mods and plugins can use this to send their data.
     /// Minecraft's internal channels are prefixed with MC|.
     fn handle_plugin_message(&mut self, mut rbuf: &[u8]) {
@@ -525,12 +582,35 @@ impl Protocol {
         rbuf.read_to_end(&mut data).unwrap();
     }
 
+    /// Sent by the client to indicate that it has performed certain actions:
+    /// sneaking (crouching), sprinting, exiting a bed, jumping with a horse,
+    /// and opening a horse's inventory while riding it.
+    fn handle_entity_action(&mut self, mut rbuf: &[u8]) {
+        // TODO: Do something
+
+        let _entity_id = rbuf.read_var_int().unwrap(); // Entity ID
+        let _action_id = rbuf.read_var_int().unwrap(); // Action ID
+        // Only used by Horse Jump Boost, in which case it ranges from 0 to 100. In all other cases it is 0.
+        let _action_par = rbuf.read_var_int().unwrap(); // Action Parameter 
+        
+        // ID | Action
+        // --------------------------------
+        // 0  | Start sneaking
+        // 1  | Stop sneaking
+        // 2  | Leave bed
+        // 3  | Start sprinting
+        // 4  | Stop sprinting
+        // 5  | Jump with horse
+        // 6  | Open ridden horse inventory
+    }
+
     fn join_game(&mut self, player: Arc<RwLock<Player>>, world: Arc<RwLock<World>>) {
         assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Join Game packet
 
+        // TODO:
         wbuf.write_int(0).unwrap(); // The player's Entity ID
         {
             let p = player.read().unwrap();
@@ -550,6 +630,19 @@ impl Protocol {
         self.write_packet(&wbuf);
     }
 
+    fn time_update(&mut self, _world: Arc<RwLock<World>>) {
+        assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x03).unwrap(); // Time Update packet
+
+        // TODO: write actual values
+        wbuf.write_long(0).unwrap(); // World Age
+        wbuf.write_long(0).unwrap(); // Time of day
+
+        self.write_packet(&wbuf);
+    }
+
     fn spawn_position(&mut self, _world: Arc<RwLock<World>>) {
         assert_eq!(self.state, State::Play);
 
@@ -557,7 +650,52 @@ impl Protocol {
         wbuf.write_var_int(0x05).unwrap(); // Spawn Position packet
 
         // TODO: Write world spawn
-        wbuf.write_position(0, 0, 0).unwrap(); // Spawn location
+        wbuf.write_position(10, 65, 10).unwrap(); // Spawn location
+
+        self.write_packet(&wbuf);
+    }
+
+    fn player_pos_look(&mut self, _player: Arc<RwLock<Player>>) {
+        assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x08).unwrap(); // Player Position And Look packet
+
+        // TODO: write actual values
+        wbuf.write_double(10.0).unwrap(); // X
+        wbuf.write_double(65.0).unwrap(); // y
+        wbuf.write_double(10.0).unwrap(); // z
+        wbuf.write_float(10.0).unwrap(); // Yaw
+        wbuf.write_float(0.0).unwrap(); // Pitch
+        wbuf.write_byte(0).unwrap(); // Flags
+
+        self.write_packet(&wbuf);
+    }
+
+    /// Chunks are not unloaded by the client automatically.
+    /// To unload chunks, send this packet with Ground-Up Continuous=true and no 16^3 chunks (eg. Primary Bit Mask=0).
+    /// The server does not send skylight information for nether-chunks,
+    /// it's up to the client to know if the player is currently in the nether.
+    /// You can also infer this information from the primary bitmask and the amount of uncompressed bytes sent.
+    fn chunk_data(&mut self, x: i32, z: i32, primary_bit_mask: u16, data: &[u8]) {
+        assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x21).unwrap(); // Chunk Data packet
+
+        // TODO: write actual values
+        wbuf.write_int(x).unwrap(); // Chunk X
+        wbuf.write_int(z).unwrap(); // Chunk Z
+
+        // This is true if the packet represents all sections in this vertical column,
+        // where the Primary Bit Mask specifies exactly which sections are included, and which are air 
+        wbuf.write_bool(true).unwrap(); // Ground-Up Continuous
+        
+        wbuf.write_ushort(primary_bit_mask).unwrap(); // Primary Bit Mask
+
+        wbuf.write_var_int(data.len() as i32).unwrap();
+
+        wbuf.write_all(data).unwrap();
 
         self.write_packet(&wbuf);
     }
@@ -589,20 +727,35 @@ impl Protocol {
         }
 
         wbuf.write_float(0.05 * 1.0).unwrap(); // Flying Speed
-        // Modifies the field of view, like a speed potion. A Notchian server will use the same value as the movement speed
+        // Modifies the field of view, like a speed potion.
+        // A Notchian server will use the same value as the movement speed
         wbuf.write_float(0.1 * 1.0).unwrap(); // Field of View Modifier
 
         self.write_packet(&wbuf);
     }
 
     /// Changes the difficulty setting in the client's option menu
-    fn server_difficulty(&mut self) {
+    fn server_difficulty(&mut self, difficulty: Difficulty) {
         assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x41).unwrap(); // Server Difficulty packet
 
-        wbuf.write_ubyte(Difficulty::Normal as u8).unwrap(); // Difficulty
+        wbuf.write_ubyte(difficulty as u8).unwrap(); // Difficulty
+
+        self.write_packet(&wbuf);
+    }
+
+
+    /// https://wiki.vg/index.php?title=Protocol&oldid=7368#Change_Game_State
+    fn change_game_state(&mut self, reason: GameStateReason, value: f32) {
+        assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x2B).unwrap(); // Change Game State packet
+
+        wbuf.write_ubyte(reason as u8).unwrap(); // Reason
+        wbuf.write_float(value).unwrap(); // Value
 
         self.write_packet(&wbuf);
     }
@@ -625,5 +778,7 @@ impl Protocol {
         });
         wbuf.write_string(&reason.to_string()).unwrap();
         self.write_packet(&wbuf);
+        let _ = self.stream.shutdown(Shutdown::Both);
+        self.state = State::Disconnected;
     }
 }
