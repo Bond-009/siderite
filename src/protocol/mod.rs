@@ -7,6 +7,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock, mpsc};
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::SystemTime;
 
 use circbuf::CircBuf;
 use openssl::rsa::Padding;
@@ -141,6 +142,13 @@ impl Protocol {
             Ok(v) => v,
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 // return, we don't want to block the protocols thread
+                return;
+            }
+            Err(ref e) if e.kind() == ErrorKind::NotConnected
+                        || e.kind() == ErrorKind::ConnectionAborted
+                        || e.kind() == ErrorKind::ConnectionReset=> {
+                // Connection closed
+                self.state = State::Disconnected;
                 return;
             }
             Err(e) => panic!("Encountered IO error: {}", e),
@@ -720,6 +728,19 @@ impl Protocol {
         debug!("Channel: {}", channel);
         let mut data = Vec::new();
         rbuf.read_to_end(&mut data).unwrap();
+    }
+
+    pub fn keep_alive(&mut self) {
+        if self.state != State::Play {
+            return;
+        }
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x00).unwrap(); // Keep Alive packet
+        let millis = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as i32;
+        wbuf.write_var_int(millis).unwrap(); // Keep Alive ID
+
+        self.write_packet(&wbuf);
     }
 
     fn join_game(&mut self, player: Arc<RwLock<Player>>, world: Arc<RwLock<World>>) {

@@ -1,11 +1,16 @@
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::{thread, time};
+use std::time::{Duration, SystemTime};
 
 use crate::protocol::Protocol;
 
-pub struct ProtocolThread {
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
+pub struct ProtocolThread {
+    rx: Receiver<Protocol>,
+    prots: Vec<Protocol>,
+    last_keep_alive: SystemTime
 }
 
 impl ProtocolThread {
@@ -13,10 +18,14 @@ impl ProtocolThread {
         let (tx, rx) = mpsc::channel();
 
         thread::spawn(move || {
-            let mut protocols = Vec::new();
+            let mut thread = ProtocolThread {
+                rx: rx,
+                prots: Vec::new(),
+                last_keep_alive: SystemTime::now()
+            };
 
             loop {
-                ProtocolThread::tick(&mut protocols, &rx);
+                thread.tick();
                 thread::sleep(time::Duration::from_millis(20));
             }
         });
@@ -24,15 +33,25 @@ impl ProtocolThread {
         tx
     }
 
-    fn tick(prots: &mut Vec<Protocol>, rx: &Receiver<Protocol>) {
-        prots.retain(|x| !x.is_disconnected()); // TODO: destroy clients
+    fn tick(&mut self) {
+        self.prots.retain(|x| !x.is_disconnected()); // TODO: destroy clients
 
-        for prot in rx.try_iter() {
-            prots.push(prot);
+        for prot in self.rx.try_iter() {
+            self.prots.push(prot);
         }
 
-        for prot in prots {
+        let send_keep_alive = self.last_keep_alive.elapsed().unwrap() >= KEEP_ALIVE_INTERVAL;
+
+        for prot in self.prots.iter_mut() {
+            if prot.is_disconnected() {
+                // We'll handle it next tick
+                continue;
+            }
+
             prot.process_data();
+            if send_keep_alive {
+                prot.keep_alive();
+            }
             prot.handle_out_packets();
         }
     }
