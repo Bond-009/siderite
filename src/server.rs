@@ -7,12 +7,12 @@ use openssl::rsa::Rsa;
 use serde_json as json;
 use uuid::Uuid;
 
-use client::Client;
-use entities::player::Player;
-use protocol::Protocol;
-use protocol::authenticator::Authenticator;
-use protocol::thread::ProtocolThread;
-use storage::world::*;
+use crate::client::Client;
+use crate::entities::player::Player;
+use crate::protocol::Protocol;
+use crate::protocol::authenticator::Authenticator;
+use crate::protocol::thread::ProtocolThread;
+use crate::storage::world::*;
 
 pub struct ServerConfig {
     pub port: u16,
@@ -69,7 +69,6 @@ impl Server {
     }
 
     pub fn start(svr: Arc<Server>) {
-
         let ps = ProtocolThread::start();
         let auth = Authenticator::start(svr.clone());
 
@@ -96,7 +95,7 @@ impl Server {
                 let prot = Protocol::new(client_id, consvr.clone(), stream, auth_c);
                 let client = prot.get_client();
                 ps_c.send(prot).unwrap();
-                
+
                 clients.push(client);
             });
         }

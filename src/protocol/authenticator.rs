@@ -7,7 +7,7 @@ use mojang::auth_with_yggdrasil;
 use serde_json as json;
 use uuid::Uuid;
 
-use server::Server;
+use crate::server::Server;
 
 pub struct AuthInfo {
     pub client_id: i32,

@@ -73,7 +73,7 @@ pub trait MCReadExt: Read {
     #[inline]
     fn read_string(&mut self) -> Result<String>
     {
-        let len = self.read_var_int().unwrap();
+        let len = self.read_var_int()?;
 
         if len == 0 { return Ok("".to_owned()); }
 
@@ -87,10 +87,7 @@ pub trait MCReadExt: Read {
             }
         }*/
 
-        match self.read(&mut bytes) {
-            Ok(_) => (),
-            Err(e) => return Err(e)
-        };
+        self.read(&mut bytes)?;
 
         match String::from_utf8(bytes) {
             Ok(res) => Ok(res),
@@ -103,7 +100,7 @@ pub trait MCReadExt: Read {
         let mut x = 0i32;
 
         for shift in [0u32, 7, 14, 21, 28].into_iter() { // (0..32).step_by(7)
-            let b = try!(self.read_u8()) as i32;
+            let b = self.read_u8()? as i32;
             x |= (b & 0x7F) << shift;
             if (b & 0x80) == 0 {
                 return Ok(x);
@@ -205,10 +202,10 @@ pub trait MCWriteExt: Write {
         let mut temp = value as u32;
         loop {
             if (temp & !0x7fu32) == 0 {
-                try!(self.write_u8(temp as u8));
+                self.write_u8(temp as u8)?;
                 return Ok(());
             } else {
-                try!(self.write_u8(((temp & 0x7F) | 0x80) as u8));
+                self.write_u8(((temp & 0x7F) | 0x80) as u8)?;
                 temp >>= 7;
             }
         }

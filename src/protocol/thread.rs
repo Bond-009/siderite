@@ -2,7 +2,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::{thread, time};
 
-use protocol::Protocol;
+use crate::protocol::Protocol;
 
 pub struct ProtocolThread {
 

@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
-use client::Client;
-use storage::world::World;
+use crate::client::Client;
+use crate::storage::world::World;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]

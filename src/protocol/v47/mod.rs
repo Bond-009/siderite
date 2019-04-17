@@ -1,7 +1,7 @@
 use std::io::Write;
 
-use mc_ext::MCWriteExt;
-use storage::chunk::*;
+use crate::mc_ext::MCWriteExt;
+use crate::storage::chunk::*;
 
 impl SerializeChunk for ChunkColumn {
     fn serialized_size(&self) -> usize {

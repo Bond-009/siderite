@@ -19,11 +19,11 @@ use uuid::adapter::Hyphenated;
 use self::authenticator::AuthInfo;
 use self::packets::Packet;
 
-use client::Client;
-use entities::player::{GameMode, Player};
-use mc_ext::{MCReadExt, MCWriteExt};
-use server::Server;
-use storage::world::{Difficulty, World};
+use crate::client::Client;
+use crate::entities::player::{GameMode, Player};
+use crate::mc_ext::{MCReadExt, MCWriteExt};
+use crate::server::Server;
+use crate::storage::world::{Difficulty, World};
 
 const VERIFY_TOKEN_LEN: usize = 4;
 const ENCRYPTION_KEY_LEN: usize = 16;

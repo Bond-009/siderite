@@ -1,8 +1,8 @@
 use std::sync::{Arc, RwLock};
 
-use entities::player::Player;
-use protocol::GameStateReason;
-use storage::world::World;
+use crate::entities::player::Player;
+use crate::protocol::GameStateReason;
+use crate::storage::world::World;
 
 pub enum Packet {
     // Login state

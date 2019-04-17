@@ -4,11 +4,11 @@ use std::sync::mpsc::Sender;
 use uuid::Uuid;
 use serde_json as json;
 
-use entities::player::Player;
-use protocol::packets::Packet;
-use server::Server;
-use storage::chunk::*;
-use storage::chunk::section::Section;
+use crate::entities::player::Player;
+use crate::protocol::packets::Packet;
+use crate::server::Server;
+use crate::storage::chunk::*;
+use crate::storage::chunk::section::Section;
 
 pub struct Client {
     pub id: i32,

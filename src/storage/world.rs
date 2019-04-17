@@ -1,4 +1,4 @@
-use entities::player::Player;
+use crate::entities::player::Player;
 
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
