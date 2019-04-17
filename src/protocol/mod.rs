@@ -224,10 +224,17 @@ impl Protocol {
                     0x04 => self.handle_player_pos(rbuf),
                     0x05 => self.handle_player_look(rbuf),
                     0x06 => self.handle_player_pos_look(rbuf),
+                    0x07 => self.handle_player_digging(rbuf),
+                    0x08 => self.handle_player_block_placement(rbuf),
+                    0x09 => self.handle_held_item_change(rbuf),
+                    0x0A => (), // Sent when the player's arm swings
+                    0x0B => self.handle_entity_action(rbuf),
+                    0x0D => self.handle_close_window(rbuf),
+                    0x10 => self.handle_creative_inventory_action(rbuf),
+                    0x13 => self.handle_player_abilities(rbuf),
                     0x15 => self.handle_client_settings(rbuf),
                     0x16 => self.handle_client_status(rbuf),
                     0x17 => self.handle_plugin_message(rbuf),
-                    0x0B => self.handle_entity_action(rbuf),
                     _ => self.unknown_packet(id, rbuf)
                 }
             }
@@ -473,6 +480,8 @@ impl Protocol {
     /// The server will frequently send out a keep-alive, each containing a random ID.
     /// The client must respond with the same packet.
     fn handle_keep_alive(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         let _id = rbuf.read_var_int().unwrap();
         // TODO: Keep alive
     }
@@ -481,6 +490,8 @@ impl Protocol {
     /// If it does, the server assumes it to be a command and attempts to process it.
     /// If it doesn't, the username of the sender is prepended and sent to all clients.
     fn handle_chat_message(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         let msg = rbuf.read_string().unwrap();
         if msg.starts_with('/') {
             // Exec cmd
@@ -491,12 +502,16 @@ impl Protocol {
     /// This packet is used to indicate whether the player is on ground (walking/swimming),
     /// or airborne (jumping/falling).
     fn handle_player(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         let on_ground = rbuf.read_bool().unwrap();
         debug!("On Ground: {}", on_ground);
     }
 
     /// Updates the player's XYZ position on the server.
     fn handle_player_pos(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         // Feet pos
         let x = rbuf.read_double().unwrap();
         let y = rbuf.read_double().unwrap();
@@ -508,6 +523,8 @@ impl Protocol {
 
     /// Updates the direction the player is looking in.
     fn handle_player_look(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         let _yaw = rbuf.read_float().unwrap();
         let _pitch = rbuf.read_float().unwrap();
         let on_ground = rbuf.read_bool().unwrap();
@@ -516,6 +533,8 @@ impl Protocol {
 
     /// A combination of Player Look and Player Position.
     fn handle_player_pos_look(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         // TODO: Do something
         // Feet pos
         let x = rbuf.read_double().unwrap();
@@ -528,8 +547,125 @@ impl Protocol {
         debug!("On Ground: {}", on_ground);
     }
 
+    /// Sent when the player mines a block. A Notchian server only accepts
+    /// digging packets with coordinates within a 6-unit radius of the player's position.
+    fn handle_player_digging(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        // Value | Meaning
+        // --------------
+        // 0     | Started digging
+        // 1     | Cancelled digging
+        // 2     | Finished digging
+        // 3     | Drop item stack
+        // 4     | Drop item
+        // 5     | Shoot arrow / finish eating
+        let _status = rbuf.read_byte().unwrap();
+        let (_x, _y, _z) = rbuf.read_position().unwrap();
+
+        // Value | Offset
+        // --------------
+        // 0     | -Y
+        // 1     | +Y
+        // 2     | -Z
+        // 3     | +Z
+        // 4     | -X
+        // 5     | +X
+        let face = rbuf.read_byte().unwrap();
+        debug_assert!(face >= 0 && face < 6);
+    }
+
+
+    /// Sent when the player changes the slot selection
+    fn handle_player_block_placement(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        let (_x, _y, _z) = rbuf.read_position().unwrap();
+        // See packet above for explanation
+        let _face = rbuf.read_byte().unwrap();
+        // TODO read slot
+
+        // let _cursor_x = rbuf.read_byte().unwrap();
+        // let _cursor_y = rbuf.read_byte().unwrap();
+        // let _cursor_z = rbuf.read_byte().unwrap();
+    }
+
+    /// Sent when the player changes the slot selection
+    fn handle_held_item_change(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        let slot = rbuf.read_short().unwrap();
+        debug_assert!(slot >= 0 && slot < 9, "Invalid slot number");
+    }
+
+    /// Sent by the client to indicate that it has performed certain actions:
+    /// sneaking (crouching), sprinting, exiting a bed, jumping with a horse,
+    /// and opening a horse's inventory while riding it.
+    fn handle_entity_action(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        // TODO: Do something
+
+        let _entity_id = rbuf.read_var_int().unwrap(); // Entity ID
+        let _action_id = rbuf.read_var_int().unwrap(); // Action ID
+        // Only used by Horse Jump Boost, in which case it ranges from 0 to 100. In all other cases it is 0.
+        let _action_par = rbuf.read_var_int().unwrap(); // Action Parameter 
+        
+        // ID | Action
+        // --------------------------------
+        // 0  | Start sneaking
+        // 1  | Stop sneaking
+        // 2  | Leave bed
+        // 3  | Start sprinting
+        // 4  | Stop sprinting
+        // 5  | Jump with horse
+        // 6  | Open ridden horse inventory
+    }
+
+    /// This packet is sent by the client when closing a window.
+    /// Notchian clients send a Close Window packet with Window ID 0 to close their inventory
+    /// even though there is never an Open Window packet for the inventory.
+    fn handle_close_window(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        let _window_id = rbuf.read_ubyte().unwrap();
+    }
+
+    /// While the user is in the standard inventory (i.e., not a crafting bench) in Creative mode,
+    /// the player will send this packet.
+    fn handle_creative_inventory_action(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        let _slot = rbuf.read_short().unwrap();
+        // TODO: handle slot data
+    }
+
+    /// The latter 2 values are used to indicate the walking and flying speeds respectively,
+    /// while the first byte is used to determine the value of 4 booleans.
+    /// The vanilla client sends this packet when the player starts/stops flying
+    /// with the Flags parameter changed accordingly. All other parameters are ignored by the vanilla server. 
+    fn handle_player_abilities(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        // Bit  | Meaning
+        // --------------------
+        // 0x01 | is Creative
+        // 0x02 | is flying
+        // 0x04 | can fly
+        // 0x08 | damage disabled (god mode)
+        let flags = rbuf.read_byte().unwrap();
+        let _is_creative = (flags & 0x01) == 0x01;
+        let _is_flying = (flags & 0x02) == 0x02;
+        let _can_fly = (flags & 0x04) == 0x04;
+        let _god_mode = (flags & 0x08) == 0x08;
+        let _flying_speed = rbuf.read_float().unwrap();
+        let _walking_speed = rbuf.read_float().unwrap();
+    }
+
     /// Sent when the player connects, or when settings are changed.
     fn handle_client_settings(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         // TODO: Do something with the settings
         let locale = rbuf.read_string().unwrap();
         debug!("Locale: {}", locale);
@@ -553,6 +689,8 @@ impl Protocol {
 
     /// Sent when the client is ready to complete login and when the client is ready to respawn after death.
     fn handle_client_status(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         let action_id = rbuf.read_var_int().unwrap(); // Action ID
 
         // Action ID | Action
@@ -575,6 +713,8 @@ impl Protocol {
     /// Mods and plugins can use this to send their data.
     /// Minecraft's internal channels are prefixed with MC|.
     fn handle_plugin_message(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
         // TODO: Do something
         let channel = rbuf.read_string().unwrap();
         debug!("Channel: {}", channel);
@@ -582,30 +722,8 @@ impl Protocol {
         rbuf.read_to_end(&mut data).unwrap();
     }
 
-    /// Sent by the client to indicate that it has performed certain actions:
-    /// sneaking (crouching), sprinting, exiting a bed, jumping with a horse,
-    /// and opening a horse's inventory while riding it.
-    fn handle_entity_action(&mut self, mut rbuf: &[u8]) {
-        // TODO: Do something
-
-        let _entity_id = rbuf.read_var_int().unwrap(); // Entity ID
-        let _action_id = rbuf.read_var_int().unwrap(); // Action ID
-        // Only used by Horse Jump Boost, in which case it ranges from 0 to 100. In all other cases it is 0.
-        let _action_par = rbuf.read_var_int().unwrap(); // Action Parameter 
-        
-        // ID | Action
-        // --------------------------------
-        // 0  | Start sneaking
-        // 1  | Stop sneaking
-        // 2  | Leave bed
-        // 3  | Start sprinting
-        // 4  | Stop sprinting
-        // 5  | Jump with horse
-        // 6  | Open ridden horse inventory
-    }
-
     fn join_game(&mut self, player: Arc<RwLock<Player>>, world: Arc<RwLock<World>>) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Join Game packet
@@ -631,7 +749,7 @@ impl Protocol {
     }
 
     fn time_update(&mut self, _world: Arc<RwLock<World>>) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x03).unwrap(); // Time Update packet
@@ -644,7 +762,7 @@ impl Protocol {
     }
 
     fn spawn_position(&mut self, _world: Arc<RwLock<World>>) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x05).unwrap(); // Spawn Position packet
@@ -656,7 +774,7 @@ impl Protocol {
     }
 
     fn player_pos_look(&mut self, _player: Arc<RwLock<Player>>) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x08).unwrap(); // Player Position And Look packet
@@ -678,7 +796,7 @@ impl Protocol {
     /// it's up to the client to know if the player is currently in the nether.
     /// You can also infer this information from the primary bitmask and the amount of uncompressed bytes sent.
     fn chunk_data(&mut self, x: i32, z: i32, primary_bit_mask: u16, data: &[u8]) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x21).unwrap(); // Chunk Data packet
@@ -701,7 +819,7 @@ impl Protocol {
     }
 
     fn player_abilities(&mut self, player: Arc<RwLock<Player>>) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x39).unwrap(); // Player Abilities packet
@@ -736,7 +854,7 @@ impl Protocol {
 
     /// Changes the difficulty setting in the client's option menu
     fn server_difficulty(&mut self, difficulty: Difficulty) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x41).unwrap(); // Server Difficulty packet
@@ -749,7 +867,7 @@ impl Protocol {
 
     /// https://wiki.vg/index.php?title=Protocol&oldid=7368#Change_Game_State
     fn change_game_state(&mut self, reason: GameStateReason, value: f32) {
-        assert_eq!(self.state, State::Play);
+        debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x2B).unwrap(); // Change Game State packet

@@ -2,7 +2,7 @@
 
 [![travis-ci Build Status][travis-ci-badge]][travis-ci-page]
 
-A Minecraft server written in Rust. (WIP)
+A Minecraft 1.8.9 server written in Rust. (WIP)
 
 State       | Status
 ------------|-------

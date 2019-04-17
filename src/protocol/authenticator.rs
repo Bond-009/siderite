@@ -53,7 +53,7 @@ pub fn java_hex_digest(mut input: [u8; 20]) -> String {
         twos_compliment(&mut input);
     }
     let mut digest = hex::encode(input);
-    digest = digest.trim_left_matches('0').to_owned();
+    digest = digest.trim_start_matches('0').to_owned();
     if negative {
         digest.insert(0, '-');
     }

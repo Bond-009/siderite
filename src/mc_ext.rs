@@ -113,6 +113,13 @@ pub trait MCReadExt: Read {
         // The number is too large to represent in a 32-bit value.
         Err(Error::new(ErrorKind::InvalidInput, "VarInt is too big"))
     }
+
+    #[inline]
+    // REVIEW
+    fn read_position(&mut self) -> Result<(i64, i64, i64)> {
+        let value = self.read_long()?;
+        return Ok((value >> 38, (value >> 26) & 0xFFF, value << 38 >> 38));
+    }
 }
 
 impl<R: Read + ?Sized> MCReadExt for R {}
