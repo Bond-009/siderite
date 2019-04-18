@@ -11,8 +11,7 @@ impl SerializeChunk for ChunkColumn {
     fn serialize<W>(&self, mut buf: W)
         where W: Write {
         buf.write_var_int(self.serialized_size() as i32).unwrap();
-        for section in self.sections.iter()
-                                    .filter(|x| x.is_some()) {
+        for section in self.sections.iter() {
             match section {
                 Some(v) => {
                     for i in 0..SECTION_BLOCK_COUNT {
@@ -25,8 +24,7 @@ impl SerializeChunk for ChunkColumn {
                 None => ()
             }
         }
-        for section in self.sections.iter()
-                                    .filter(|x| x.is_some()) {
+        for section in self.sections.iter() {
             match section {
                 Some(v) => {
                     buf.write(&v.block_light).unwrap();
@@ -34,8 +32,7 @@ impl SerializeChunk for ChunkColumn {
                 None => ()
             }
         }
-        for section in self.sections.iter()
-                                    .filter(|x| x.is_some()) {
+        for section in self.sections.iter() {
             match section {
                 Some(v) => {
                     buf.write(&v.block_sky_light).unwrap();

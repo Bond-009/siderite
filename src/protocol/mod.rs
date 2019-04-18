@@ -146,7 +146,7 @@ impl Protocol {
             }
             Err(ref e) if e.kind() == ErrorKind::NotConnected
                         || e.kind() == ErrorKind::ConnectionAborted
-                        || e.kind() == ErrorKind::ConnectionReset=> {
+                        || e.kind() == ErrorKind::ConnectionReset => {
                 // Connection closed
                 self.state = State::Disconnected;
                 return;
@@ -286,7 +286,7 @@ impl Protocol {
 
     fn write_packet(&mut self, mut rbuf: &[u8]) {
         let lenght = rbuf.len();
-        debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, lenght, rbuf.first().unwrap());
+        debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, lenght, rbuf[0]);
         let mut vec = Vec::with_capacity(lenght + 4);
         vec.write_var_int(lenght as i32).unwrap(); // Write packet lenght
         vec.write_all(&mut rbuf).unwrap(); // Write packet data
@@ -461,11 +461,12 @@ impl Protocol {
 
             let uuid = client.get_uuid().unwrap();
             let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
+            let username = client.username.clone().unwrap();
             debug!("uuid: {}", uuid_str);
-            debug!("name: {}", client.username.clone().unwrap());
+            debug!("name: {}", username);
 
             wbuf.write_string(&uuid_str).unwrap();
-            wbuf.write_string(&client.username.clone().unwrap()).unwrap();
+            wbuf.write_string(&username).unwrap();
         }
 
         self.write_packet(&wbuf);

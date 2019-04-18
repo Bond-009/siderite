@@ -47,7 +47,7 @@ impl Client {
     }
 
     pub fn kick(&self, reason: &str) {
-        let packet = Packet::Disconnect(reason.to_string());
+        let packet = Packet::Disconnect(reason.to_owned());
         self.protocol.lock().unwrap().send(packet).unwrap();
     }
 

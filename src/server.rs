@@ -50,7 +50,7 @@ impl Server {
         Server {
             // MC Update (1.7.x): The server ID is now sent as an empty string.
             // Hashes also utilize the public key, so they will still be correct.
-            id: "".to_owned(),
+            id: String::new(),
 
             worlds: Vec::new(),
             clients: Mutex::new(Vec::new()),

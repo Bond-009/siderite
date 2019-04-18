@@ -10,7 +10,7 @@ fn main() {
 
     let mut server = Server::new(ServerConfig {
         port: 25565,
-        description: "A custom MC server".to_string(),
+        description: "A custom MC server".to_owned(),
         max_players: 100,
         favicon: String::new(),
         authentication: false,

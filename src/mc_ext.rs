@@ -74,25 +74,31 @@ pub trait MCReadExt: Read {
     fn read_string(&mut self) -> Result<String>
     {
         let len = self.read_var_int()?;
-
-        if len == 0 { return Ok("".to_owned()); }
+        if len == 0 {
+            return Ok(String::new());
+        }
 
         let mut bytes = vec![0; len as usize];
-        /*
-        let mut n_read = 0usize;
-        while n_read < bytes.len() {
-            match try!(self.read(&mut bytes[n_read..])) {
-                0 => return Err(Error::new(ErrorKind::InvalidInput, "Incomplete NBT value")),
-                n => n_read += n
-            }
-        }*/
-
         self.read(&mut bytes)?;
 
         match String::from_utf8(bytes) {
             Ok(res) => Ok(res),
             Err(_) => Err(Error::new(ErrorKind::InvalidInput, "Couldn't create string"))
         }
+    }
+
+    #[inline]
+    unsafe fn read_string_unchecked(&mut self) -> Result<String>
+    {
+        let len = self.read_var_int()?;
+        if len == 0 {
+            return Ok(String::new());
+        }
+
+        let mut bytes = vec![0; len as usize];
+        self.read(&mut bytes)?;
+
+        Ok(String::from_utf8_unchecked(bytes))
     }
 
     #[inline]
@@ -114,7 +120,7 @@ pub trait MCReadExt: Read {
     #[inline]
     // REVIEW
     fn read_position(&mut self) -> Result<(i64, i64, i64)> {
-        let value = self.read_long()?;
+        let value = self.read_i64::<BigEndian>()?;
         return Ok((value >> 38, (value >> 26) & 0xFFF, value << 38 >> 38));
     }
 }
@@ -215,7 +221,7 @@ pub trait MCWriteExt: Write {
     // REVIEW
     fn write_position(&mut self, x: i64, y: i64, z: i64) -> Result<()> {
         let value: i64 = ((x & 0x3FFFFFF) << 38) | ((y & 0xFFF) << 26) | (z & 0x3FFFFFF);
-        self.write_long(value)
+        self.write_i64::<BigEndian>(value)
     }
 }
 
