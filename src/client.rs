@@ -7,9 +7,7 @@ use serde_json as json;
 use crate::entities::player::Player;
 use crate::protocol::packets::Packet;
 use crate::server::Server;
-use crate::storage::chunk::*;
-use crate::storage::chunk::section::Section;
-use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
+use crate::storage::chunk::chunk_map::ChunkCoord;
 
 pub struct Client {
     pub id: i32,

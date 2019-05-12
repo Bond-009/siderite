@@ -16,6 +16,7 @@ pub struct AuthInfo {
 }
 
 pub struct Authenticator {
+    server: Arc<Server>
 }
 
 impl Authenticator {
@@ -23,26 +24,30 @@ impl Authenticator {
         let (tx, rx) = mpsc::channel();
 
         thread::spawn(move || {
+            let authenticator = Authenticator {
+                server: server
+            };
+
             for received in rx.iter() {
-                Authenticator::handle_request(server.clone(), received);
+                authenticator.handle_request(received);
             }
         });
 
         tx
     }
 
-    fn handle_request(server: Arc<Server>, info: AuthInfo) {
-        if !server.authenticate {
+    fn handle_request(&self, info: AuthInfo) {
+        if !self.server.authenticate {
             // TODO: check if UUID is compatible with vanilla
             let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
-            server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
+            self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
             return;
         }
 
         let res = auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
         let uuid = Uuid::parse_str(&res.id).unwrap();
         
-        server.auth_user(info.client_id, res.name, uuid, res.properties);
+        self.server.auth_user(info.client_id, res.name, uuid, res.properties);
     }
 }
 
@@ -78,22 +83,22 @@ mod tests {
 
     #[test]
     fn notch() {
-        let hash = java_hex_digest(sha1("Notch".as_bytes()));
+        let hash = java_hex_digest(sha1(b"Notch"));
         println!("Notch: {}", hash);
-        assert_eq!(hash, "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48".to_owned());
+        assert_eq!(&hash, "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48");
     }
 
     #[test]
     fn jeb_() {
-        let hash = java_hex_digest(sha1("jeb_".as_bytes()));
+        let hash = java_hex_digest(sha1(b"jeb_"));
         println!("jeb_: {}", hash);
-        assert_eq!(hash, "-7c9d5b0044c130109a5d7b5fb5c317c02b4e28c1".to_owned());
+        assert_eq!(&hash, "-7c9d5b0044c130109a5d7b5fb5c317c02b4e28c1");
     }
 
     #[test]
     fn simon() {
-        let hash = java_hex_digest(sha1("simon".as_bytes()));
+        let hash = java_hex_digest(sha1(b"simon"));
         println!("simon: {}", hash);
-        assert_eq!(hash, "88e16a1019277b15d58faf0541e11910eb756f6".to_owned());
+        assert_eq!(&hash, "88e16a1019277b15d58faf0541e11910eb756f6");
     }
 }

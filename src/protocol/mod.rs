@@ -25,7 +25,7 @@ use crate::entities::player::{GameMode, Player};
 use crate::mc_ext::{MCReadExt, MCWriteExt};
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
-use crate::storage::chunk::{Chunk, ChunkColumn, SerializeChunk};
+use crate::storage::chunk::{Chunk, SerializeChunk};
 use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
 
 const VERIFY_TOKEN_LEN: usize = 4;
@@ -833,7 +833,7 @@ impl Protocol {
         // where the Primary Bit Mask specifies exactly which sections are included, and which are air 
         wbuf.write_bool(true).unwrap(); // Ground-Up Continuous
 
-        chunk_map.do_with_chunk_mut(coord, &mut |chunk: &mut Chunk| {
+        chunk_map.do_with_chunk(coord, &mut |chunk: &Chunk| {
             let bit_mask = chunk.data.get_primary_bit_mask();
             wbuf.write_ushort(bit_mask).unwrap(); // Primary Bit Mask
 
@@ -905,6 +905,8 @@ impl Protocol {
 
     // Other packets:
     fn disconnect(&mut self, reason: &str) {
+        debug_assert!(self.state == State::Login || self.state == State::Play);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(
             match self.state {

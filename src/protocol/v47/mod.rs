@@ -5,12 +5,13 @@ use crate::storage::chunk::*;
 
 impl SerializeChunk for ChunkColumn {
     fn serialized_size(&self) -> usize {
-        return self.get_num_sections() * SECTION_BLOCK_COUNT * 3 + AREA as usize;
+        self.get_num_sections() * SECTION_BLOCK_COUNT * 3 + AREA as usize
     }
 
     fn serialize<W>(&self, mut buf: W)
         where W: Write {
         buf.write_var_int(self.serialized_size() as i32).unwrap();
+
         for section in self.sections.iter() {
             match section {
                 Some(v) => {
@@ -24,6 +25,7 @@ impl SerializeChunk for ChunkColumn {
                 None => ()
             }
         }
+
         for section in self.sections.iter() {
             match section {
                 Some(v) => {
@@ -32,6 +34,7 @@ impl SerializeChunk for ChunkColumn {
                 None => ()
             }
         }
+
         for section in self.sections.iter() {
             match section {
                 Some(v) => {
@@ -40,6 +43,7 @@ impl SerializeChunk for ChunkColumn {
                 None => ()
             }
         }
+
         // TODO
         // Write biome data
         buf.write(&[1; AREA as usize]).unwrap();

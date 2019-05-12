@@ -37,7 +37,7 @@ impl Player {
         self.gamemode
     }
 
-        pub fn get_world(&self) -> Arc<RwLock<World>> {
+    pub fn get_world(&self) -> Arc<RwLock<World>> {
         self.world.clone()
     }
 }

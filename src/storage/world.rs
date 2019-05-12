@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entities::player::Player;
-use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
+use crate::storage::chunk::chunk_map::ChunkMap;
 
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]

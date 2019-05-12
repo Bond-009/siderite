@@ -6,4 +6,5 @@ pub enum Blocks {
     Grass = 2,
     Dirt = 3,
     CobbleStone = 4,
+    // TODO: Add more
 }

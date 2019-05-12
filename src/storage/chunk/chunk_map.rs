@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::io::Write;
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
 use crate::storage::chunk::*;
 use crate::storage::chunk::section::Section;
@@ -22,10 +21,10 @@ impl ChunkMap {
         }
     }
 
-    pub fn do_with_chunk(&self, coord: ChunkCoord, function: &Fn(&Chunk)) {
+    pub fn do_with_chunk(&self, coord: ChunkCoord, function: &mut FnMut(&Chunk)) {
         let chunks = self.chunks.read().unwrap();
 
-        match (*chunks).get(&coord) {
+        match chunks.get(&coord) {
             Some(chunk) => function(chunk),
             None => ()
         };
@@ -34,7 +33,7 @@ impl ChunkMap {
     pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: &mut FnMut(&mut Chunk)) {
         let mut chunks = self.chunks.write().unwrap();
 
-        match (*chunks).get_mut(&coord) {
+        match chunks.get_mut(&coord) {
             Some(chunk) => function(chunk),
             None => ()
         };
