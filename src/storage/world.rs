@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use crate::entities::player::Player;
+use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
 
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
@@ -29,6 +32,7 @@ pub struct World {
     difficulty: Difficulty,
 
     players: Vec<Player>,
+    chunk_map: Arc<ChunkMap>
 }
 
 impl World {
@@ -39,6 +43,7 @@ impl World {
             difficulty: config.difficulty,
 
             players: Vec::new(),
+            chunk_map: Arc::new(ChunkMap::new())
         }
     }
 
@@ -52,5 +57,9 @@ impl World {
 
     pub fn get_num_players(&self) -> usize {
         self.players.len()
+    }
+
+    pub fn get_chunk_map(&self) -> Arc<ChunkMap> {
+        self.chunk_map.clone()
     }
 }

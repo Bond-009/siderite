@@ -1,4 +1,5 @@
 pub mod section;
+pub mod chunk_map;
 
 use std::io::Write;
 
@@ -35,4 +36,8 @@ impl ChunkColumn {
     pub fn get_num_sections(&self) -> usize {
         self.sections.iter().filter(|x| x.is_some()).count()
     }
+}
+
+pub struct Chunk {
+    pub data: ChunkColumn
 }

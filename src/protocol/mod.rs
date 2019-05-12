@@ -25,6 +25,8 @@ use crate::entities::player::{GameMode, Player};
 use crate::mc_ext::{MCReadExt, MCWriteExt};
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
+use crate::storage::chunk::{Chunk, ChunkColumn, SerializeChunk};
+use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
 
 const VERIFY_TOKEN_LEN: usize = 4;
 const ENCRYPTION_KEY_LEN: usize = 16;
@@ -276,7 +278,7 @@ impl Protocol {
             Packet::SpawnPosition(world)           => self.spawn_position(world),
             Packet::PlayerPositionAndLook(player)  => self.player_pos_look(player),
             Packet::PlayerAbilities(player)        => self.player_abilities(player),
-            Packet::ChunkData(x, z, primary_bit_mask, data) => self.chunk_data(x, z, primary_bit_mask, &data),
+            Packet::ChunkData(coord, chunk_map)    => self.chunk_data(coord, chunk_map),
             Packet::ServerDifficulty()             => self.server_difficulty(Difficulty::Normal), // TODO: change
             Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
 
@@ -817,25 +819,26 @@ impl Protocol {
     /// The server does not send skylight information for nether-chunks,
     /// it's up to the client to know if the player is currently in the nether.
     /// You can also infer this information from the primary bitmask and the amount of uncompressed bytes sent.
-    fn chunk_data(&mut self, x: i32, z: i32, primary_bit_mask: u16, data: &[u8]) {
+    fn chunk_data(&mut self, coord: ChunkCoord, chunk_map: Arc<ChunkMap>) {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x21).unwrap(); // Chunk Data packet
 
         // TODO: write actual values
-        wbuf.write_int(x).unwrap(); // Chunk X
-        wbuf.write_int(z).unwrap(); // Chunk Z
+        wbuf.write_int(coord.x).unwrap(); // Chunk X
+        wbuf.write_int(coord.z).unwrap(); // Chunk Z
 
         // This is true if the packet represents all sections in this vertical column,
         // where the Primary Bit Mask specifies exactly which sections are included, and which are air 
         wbuf.write_bool(true).unwrap(); // Ground-Up Continuous
-        
-        wbuf.write_ushort(primary_bit_mask).unwrap(); // Primary Bit Mask
 
-        wbuf.write_var_int(data.len() as i32).unwrap();
+        chunk_map.do_with_chunk_mut(coord, &mut |chunk: &mut Chunk| {
+            let bit_mask = chunk.data.get_primary_bit_mask();
+            wbuf.write_ushort(bit_mask).unwrap(); // Primary Bit Mask
 
-        wbuf.write_all(data).unwrap();
+            chunk.data.serialize(&mut wbuf);
+        });
 
         self.write_packet(&wbuf);
     }

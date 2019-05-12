@@ -9,6 +9,7 @@ use crate::protocol::packets::Packet;
 use crate::server::Server;
 use crate::storage::chunk::*;
 use crate::storage::chunk::section::Section;
+use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
 
 pub struct Client {
     pub id: i32,
@@ -68,44 +69,22 @@ impl Client {
     pub fn finish_auth(&self, player: Arc<RwLock<Player>>) {
         let world = player.read().unwrap().get_world();
         let prot = self.protocol.lock().unwrap();
+        let chunk_map = world.read().unwrap().get_chunk_map();
 
         prot.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
         prot.send(Packet::SpawnPosition(world.clone())).unwrap();
         prot.send(Packet::ServerDifficulty()).unwrap();
         prot.send(Packet::PlayerAbilities(player.clone())).unwrap();
 
-        let chunk = ChunkColumn {
-            sections: [
-                Some(Section {
-                    block_types: [3; SECTION_BLOCK_COUNT],
-                    block_metas: [0; SECTION_BLOCK_COUNT / 2],
-                    block_light: [15; SECTION_BLOCK_COUNT / 2],
-                    block_sky_light: [15; SECTION_BLOCK_COUNT / 2]
-                }),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None
-            ]
-        };
-        let primary_bit_mask = chunk.get_primary_bit_mask();
-        let mut data = Vec::with_capacity(chunk.serialized_size() + 4);
-        chunk.serialize(&mut data);
-
         for x in -3..3 {
             for z in -3..3 {
-                prot.send(Packet::ChunkData(x, z, primary_bit_mask, data.clone())).unwrap();
+                let coord = ChunkCoord {x: x, z: z};
+                let map = chunk_map.clone();
+                map.touch_chunk(coord);
+                prot.send(Packet::ChunkData(
+                        coord,
+                        map)
+                    ).unwrap();
             }
         }
 

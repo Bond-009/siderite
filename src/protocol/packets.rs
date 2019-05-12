@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::entities::player::Player;
 use crate::protocol::GameStateReason;
 use crate::storage::world::World;
+use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
 
 pub enum Packet {
     // Login state
@@ -21,7 +22,7 @@ pub enum Packet {
     /// Player
     PlayerAbilities(Arc<RwLock<Player>>),
     /// Primary Bit Mask, Chunk Data
-    ChunkData(i32, i32, u16, Vec<u8>),
+    ChunkData(ChunkCoord, Arc<ChunkMap>),
     ///
     ServerDifficulty(),
     ///
