@@ -4,13 +4,15 @@ use std::sync::mpsc::Sender;
 use uuid::Uuid;
 use serde_json as json;
 
+use crate::blocks::BlockFace;
 use crate::entities::player::Player;
+use crate::protocol::DigStatus;
 use crate::protocol::packets::Packet;
 use crate::server::Server;
-use crate::storage::chunk::chunk_map::ChunkCoord;
+use crate::storage::chunk::{ChunkCoord, Coord};
 
 pub struct Client {
-    pub id: i32,
+    id: i32,
     pub username: Option<String>,
     uuid: Option<Uuid>,
     properties: json::Value,
@@ -39,6 +41,10 @@ impl Client {
 
     pub fn get_server(&self) -> Arc<Server> {
         self.server.clone()
+    }
+
+    pub fn get_id(&self) -> i32 {
+        self.id
     }
 
     pub fn get_uuid(&self) -> Option<Uuid> {
@@ -88,5 +94,16 @@ impl Client {
 
         prot.send(Packet::TimeUpdate(world.clone())).unwrap();
         prot.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
+    }
+
+    pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {
+        match status {
+            DigStatus::StartedDigging => (),
+            DigStatus::CancelledDigging => (),
+            DigStatus::FinishedDigging => (),
+            DigStatus::DropItemStack => (),
+            DigStatus::DropItem => (),
+            DigStatus::ShootArrowFinishEating => ()
+        };
     }
 }

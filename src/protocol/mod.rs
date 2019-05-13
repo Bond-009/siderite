@@ -20,13 +20,14 @@ use uuid::adapter::Hyphenated;
 use self::authenticator::AuthInfo;
 use self::packets::Packet;
 
+use crate::blocks::BlockFace;
 use crate::client::Client;
 use crate::entities::player::{GameMode, Player};
 use crate::mc_ext::{MCReadExt, MCWriteExt};
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
-use crate::storage::chunk::{Chunk, SerializeChunk};
-use crate::storage::chunk::chunk_map::{ChunkCoord, ChunkMap};
+use crate::storage::chunk::{Chunk, ChunkCoord, Coord, SerializeChunk};
+use crate::storage::chunk::chunk_map::ChunkMap;
 
 const VERIFY_TOKEN_LEN: usize = 4;
 const ENCRYPTION_KEY_LEN: usize = 16;
@@ -65,6 +66,17 @@ pub enum GameStateReason {
     FadeTime = 8,
     /// Unknown
     PlayMobAppearance = 10,
+}
+
+#[repr(i8)]
+#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
+pub enum DigStatus {
+    StartedDigging = 0,
+    CancelledDigging = 1,
+    FinishedDigging = 2,
+    DropItemStack = 3,
+    DropItem = 4,
+    ShootArrowFinishEating = 5
 }
 
 pub struct Protocol {
@@ -368,7 +380,7 @@ impl Protocol {
         }
         else {
             self.authenticator.send(AuthInfo {
-                client_id: self.client.read().unwrap().id,
+                client_id: self.client.read().unwrap().get_id(),
                 username: username,
                 server_id: None
             }).unwrap();
@@ -425,7 +437,7 @@ impl Protocol {
         let username = client.username.clone().unwrap();
 
         self.authenticator.send(AuthInfo {
-                client_id: client.id,
+                client_id: client.get_id(),
                 username: username,
                 server_id: Some(server_id)
             }).unwrap();
@@ -563,27 +575,21 @@ impl Protocol {
     fn handle_player_digging(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
 
-        // Value | Meaning
-        // --------------
-        // 0     | Started digging
-        // 1     | Cancelled digging
-        // 2     | Finished digging
-        // 3     | Drop item stack
-        // 4     | Drop item
-        // 5     | Shoot arrow / finish eating
-        let _status = rbuf.read_byte().unwrap();
-        let (_x, _y, _z) = rbuf.read_position().unwrap();
+        let status = rbuf.read_byte().unwrap();
+        let (x, y, z) = rbuf.read_position().unwrap();
 
-        // Value | Offset
-        // --------------
-        // 0     | -Y
-        // 1     | +Y
-        // 2     | -Z
-        // 3     | +Z
-        // 4     | -X
-        // 5     | +X
         let face = rbuf.read_byte().unwrap();
         debug_assert!(face >= 0 && face < 6);
+
+        let client = self.client.read().unwrap();
+        client.handle_left_click(
+            Coord {
+                x: x as i32,
+                y: y as i32,
+                z: z as i32
+            },
+            BlockFace::from_i8(face).unwrap(),
+            DigStatus::from_i8(status).unwrap());
     }
 
 
@@ -837,7 +843,7 @@ impl Protocol {
             let bit_mask = chunk.data.get_primary_bit_mask();
             wbuf.write_ushort(bit_mask).unwrap(); // Primary Bit Mask
 
-            chunk.data.serialize(&mut wbuf);
+            chunk.serialize(&mut wbuf);
         });
 
         self.write_packet(&wbuf);

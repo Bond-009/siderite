@@ -121,7 +121,7 @@ impl Server {
 
     fn get_client(&self, client_id: i32) -> Option<Arc<RwLock<Client>>> {
         for client in self.clients.lock().unwrap().iter() {
-            if client.read().unwrap().id == client_id {
+            if client.read().unwrap().get_id() == client_id {
                 return Some(client.clone());
             }
         }
@@ -151,7 +151,7 @@ impl Server {
 
     pub fn kick_user(&self, client_id: i32, reason: &str) {
         for client in self.clients.lock().unwrap().iter() {
-            if client.read().unwrap().id == client_id {
+            if client.read().unwrap().get_id() == client_id {
                 client.write().unwrap().kick(reason);
                 return;
             }
