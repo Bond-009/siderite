@@ -1,9 +1,9 @@
-extern crate byteorder;
 extern crate circbuf;
 extern crate hex;
 #[macro_use]
 extern crate log;
 extern crate openssl;
+extern crate mcrw;
 extern crate mojang;
 #[macro_use]
 extern crate num_derive;
@@ -15,7 +15,6 @@ extern crate uuid;
 
 pub mod blocks;
 pub mod entities;
-pub mod mc_ext;
 pub mod server;
 pub mod storage;
 

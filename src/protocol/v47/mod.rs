@@ -1,6 +1,7 @@
 use std::io::Write;
 
-use crate::mc_ext::MCWriteExt;
+use mcrw::MCWriteExt;
+
 use crate::storage::chunk::*;
 
 impl SerializeChunk for Chunk {

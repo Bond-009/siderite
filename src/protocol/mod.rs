@@ -10,24 +10,24 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::SystemTime;
 
 use circbuf::CircBuf;
+use mcrw::{MCReadExt, MCWriteExt};
+use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
 use openssl::sha;
 use openssl::symm::{encrypt, decrypt, Cipher};
-use num_traits::FromPrimitive;
 use rand::{thread_rng, Rng};
 use uuid::adapter::Hyphenated;
-
-use self::authenticator::AuthInfo;
-use self::packets::Packet;
 
 use crate::blocks::BlockFace;
 use crate::client::Client;
 use crate::entities::player::{GameMode, Player};
-use crate::mc_ext::{MCReadExt, MCWriteExt};
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
 use crate::storage::chunk::{Chunk, ChunkCoord, Coord, SerializeChunk};
 use crate::storage::chunk::chunk_map::ChunkMap;
+
+use self::authenticator::AuthInfo;
+use self::packets::Packet;
 
 const VERIFY_TOKEN_LEN: usize = 4;
 const ENCRYPTION_KEY_LEN: usize = 16;
