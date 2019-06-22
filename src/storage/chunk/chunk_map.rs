@@ -15,7 +15,7 @@ impl ChunkMap {
         }
     }
 
-    pub fn do_with_chunk(&self, coord: ChunkCoord, function: &mut FnMut(&Chunk)) {
+    pub fn do_with_chunk(&self, coord: ChunkCoord, function: &mut dyn FnMut(&Chunk)) {
         let chunks = self.chunks.read().unwrap();
 
         match chunks.get(&coord) {
@@ -24,7 +24,7 @@ impl ChunkMap {
         };
     }
 
-    pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: &mut FnMut(&mut Chunk)) {
+    pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: &mut dyn FnMut(&mut Chunk)) {
         let mut chunks = self.chunks.write().unwrap();
 
         match chunks.get_mut(&coord) {

@@ -1,4 +1,5 @@
 extern crate circbuf;
+extern crate flate2;
 extern crate hex;
 #[macro_use]
 extern crate log;
