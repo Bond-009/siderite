@@ -25,7 +25,7 @@ impl Authenticator {
 
         thread::spawn(move || {
             let authenticator = Authenticator {
-                server: server
+                server
             };
 
             for received in rx.iter() {

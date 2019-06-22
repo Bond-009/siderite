@@ -26,7 +26,7 @@ impl Player {
     pub fn new(client: Arc<RwLock<Client>>, world: Arc<RwLock<World>>) -> Player {
         Player { 
             _client: client,
-            world: world,
+            world,
 
             _health: MAX_HEATH,
             gamemode: GameMode::Creative // TODO: change

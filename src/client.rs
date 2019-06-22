@@ -27,14 +27,14 @@ impl Client {
 
     pub fn new(id: i32, server: Arc<Server>, protocol: Sender<Packet>) -> Client {
          Client {
-            id: id,
+            id,
             username: None,
             uuid: None,
             properties: json::Value::Null,
 
             _player: None,
 
-            server: server,
+            server,
             protocol: Mutex::new(protocol),
         }
     }
@@ -48,7 +48,7 @@ impl Client {
     }
 
     pub fn get_uuid(&self) -> Option<Uuid> {
-        self.uuid.clone()
+        self.uuid
     }
 
     pub fn kick(&self, reason: &str) {
@@ -82,7 +82,7 @@ impl Client {
 
         for x in -3..3 {
             for z in -3..3 {
-                let coord = ChunkCoord {x: x, z: z};
+                let coord = ChunkCoord {x, z};
                 let map = chunk_map.clone();
                 map.touch_chunk(coord);
                 prot.send(Packet::ChunkData(

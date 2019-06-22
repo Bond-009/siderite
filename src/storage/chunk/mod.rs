@@ -75,7 +75,7 @@ impl ChunkColumn {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
-                block_sky_light: [15; SECTION_BLOCK_COUNT / 2]
+                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
             });
         }
 
@@ -106,7 +106,7 @@ impl ChunkColumn {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
-                block_sky_light: [15; SECTION_BLOCK_COUNT / 2]
+                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
             });
         }
 

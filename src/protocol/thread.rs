@@ -19,7 +19,7 @@ impl ProtocolThread {
 
         thread::spawn(move || {
             let mut thread = ProtocolThread {
-                rx: rx,
+                rx,
                 prots: Vec::new(),
                 last_keep_alive: SystemTime::now()
             };
@@ -41,10 +41,11 @@ impl ProtocolThread {
         }
 
         let send_keep_alive = self.last_keep_alive.elapsed().unwrap() >= KEEP_ALIVE_INTERVAL;
-        let mut millis = 0;
-        if send_keep_alive {
-            millis = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as i32;
-        }
+        let millis = if send_keep_alive {
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as i32
+        } else {
+            0
+        };
 
         for prot in self.prots.iter_mut() {
             if prot.is_disconnected() {

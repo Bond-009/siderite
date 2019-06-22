@@ -153,7 +153,7 @@ impl Protocol {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn handle_legacy_ping(stream: &mut TcpStream) {
@@ -205,7 +205,6 @@ impl Protocol {
                 return;
             }
         };
-        drop(tmp);
 
         if len == 0 {
             // Connection closed
@@ -231,7 +230,7 @@ impl Protocol {
 
     fn handle_in_packets(&mut self) {
         loop {
-            if self.received_data.len() == 0 {
+            if self.received_data.is_empty() {
                 // No data
                 return;
             }
@@ -249,7 +248,7 @@ impl Protocol {
             }
 
             let mut rbuf = vec![0u8; length];
-            self.received_data.read(&mut rbuf).unwrap();
+            self.received_data.read_exact(&mut rbuf).unwrap();
             let mut rslice = &rbuf[..];
 
             if self.compressed {
@@ -260,13 +259,13 @@ impl Protocol {
                     d.read_to_end(&mut vec).unwrap();
                     let mut slice = &vec[..];
                     let id = slice.read_var_int().unwrap();
-                    self.handle_packet(&mut slice, id);
+                    self.handle_packet(&slice, id);
                     return;
                 }
             }
 
             let id = rslice.read_var_int().unwrap();
-            self.handle_packet(&mut rslice, id);
+            self.handle_packet(&rslice, id);
         }
     }
 
@@ -390,11 +389,11 @@ impl Protocol {
             let buf = e.finish()?;
             self.stream.write_var_int(Protocol::var_int_len(length) + buf.len() as i32)?;
             self.stream.write_var_int(length)?;
-            self.stream.write(&buf)?;
+            self.stream.write_all(&buf)?;
         } else {
             self.stream.write_var_int(length + 1)?; // Write packet length
             self.stream.write_var_int(0)?;
-            self.stream.write(&rbuf)?;
+            self.stream.write_all(&rbuf)?;
         }
 
         Ok(())
@@ -469,7 +468,7 @@ impl Protocol {
         else {
             self.authenticator.send(AuthInfo {
                 client_id: self.client.read().unwrap().get_id(),
-                username: username,
+                username,
                 server_id: None
             }).unwrap();
         }
@@ -479,12 +478,12 @@ impl Protocol {
         let ss_len = rbuf.read_var_int().unwrap() as usize; // Shared Secret Key Length
         debug!("ss_len {}", ss_len);
         let mut ssarr = vec![0u8; ss_len];
-        rbuf.read(&mut ssarr).unwrap(); // Shared Secret
+        rbuf.read_exact(&mut ssarr).unwrap(); // Shared Secret
         
         let vt_len = rbuf.read_var_int().unwrap() as usize; // Verify Token Length
         debug!("vt_len {}", vt_len);
         let mut vtarr = vec![0u8; vt_len];
-        rbuf.read(&mut vtarr).unwrap(); // Verify Token
+        rbuf.read_exact(&mut vtarr).unwrap(); // Verify Token
 
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
@@ -529,7 +528,7 @@ impl Protocol {
 
         self.authenticator.send(AuthInfo {
                 client_id: client.get_id(),
-                username: username,
+                username,
                 server_id: Some(server_id)
             }).unwrap();
     }
@@ -1037,10 +1036,10 @@ impl Protocol {
 
     fn is_disconnection_error(e: ErrorKind) -> bool
     {
-        return e == ErrorKind::NotConnected
+        e == ErrorKind::NotConnected
             || e == ErrorKind::ConnectionAborted
             || e == ErrorKind::ConnectionRefused
-            || e == ErrorKind::BrokenPipe;
+            || e == ErrorKind::BrokenPipe
     }
 
     fn var_int_len(value: i32) -> i32 {

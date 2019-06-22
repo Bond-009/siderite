@@ -9,7 +9,7 @@ pub struct ChunkMap {
 }
 
 impl ChunkMap {
-    pub fn new() -> ChunkMap {
+    pub fn default() -> ChunkMap {
         ChunkMap {
             chunks: RwLock::new(HashMap::new())
         }
@@ -18,19 +18,17 @@ impl ChunkMap {
     pub fn do_with_chunk(&self, coord: ChunkCoord, function: &mut dyn FnMut(&Chunk)) {
         let chunks = self.chunks.read().unwrap();
 
-        match chunks.get(&coord) {
-            Some(chunk) => function(chunk),
-            None => ()
-        };
+        if let Some(chunk) = chunks.get(&coord) {
+            function(chunk);
+        }
     }
 
     pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: &mut dyn FnMut(&mut Chunk)) {
         let mut chunks = self.chunks.write().unwrap();
 
-        match chunks.get_mut(&coord) {
-            Some(chunk) => function(chunk),
-            None => ()
-        };
+        if let Some(chunk) = chunks.get_mut(&coord) {
+            function(chunk);
+        }
     }
 
     pub fn touch_chunk(&self, coord: ChunkCoord) {
@@ -49,7 +47,7 @@ impl ChunkMap {
                         block_types: [3; SECTION_BLOCK_COUNT],
                         block_metas: [0; SECTION_BLOCK_COUNT / 2],
                         block_light: [0; SECTION_BLOCK_COUNT / 2],
-                        block_sky_light: [15; SECTION_BLOCK_COUNT / 2]
+                        block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
                     }),
                     None,
                     None,

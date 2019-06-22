@@ -43,7 +43,7 @@ impl World {
             difficulty: config.difficulty,
 
             players: Vec::new(),
-            chunk_map: Arc::new(ChunkMap::new())
+            chunk_map: Arc::new(ChunkMap::default())
         }
     }
 

@@ -30,7 +30,7 @@ impl SerializeChunk for Chunk {
         for section in self.data.sections.iter() {
             match section {
                 Some(v) => {
-                    buf.write(&v.block_light).unwrap();
+                    buf.write_all(&v.block_light).unwrap();
                 },
                 None => ()
             }
@@ -39,12 +39,12 @@ impl SerializeChunk for Chunk {
         for section in self.data.sections.iter() {
             match section {
                 Some(v) => {
-                    buf.write(&v.block_sky_light).unwrap();
+                    buf.write_all(&v.block_sky_light).unwrap();
                 },
                 None => ()
             }
         }
 
-        buf.write(&self.biome_map).unwrap();
+        buf.write_all(&self.biome_map).unwrap();
     }
 }

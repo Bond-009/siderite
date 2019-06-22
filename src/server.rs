@@ -115,8 +115,7 @@ impl Server {
         // TODO: Try load player
 
         let world = self.worlds[0].clone();
-        let player = Arc::new(RwLock::new(Player::new(client, world)));
-        return player;
+        Arc::new(RwLock::new(Player::new(client, world)))
     }
 
     fn get_client(&self, client_id: i32) -> Option<Arc<RwLock<Client>>> {
@@ -125,7 +124,8 @@ impl Server {
                 return Some(client.clone());
             }
         }
-        return None
+
+        None
     }
 
     pub fn online_players(&self) -> i32 {
@@ -133,6 +133,7 @@ impl Server {
         for world in &self.worlds {
             players += world.read().unwrap().get_num_players();
         }
+
         players as i32
     }
 
