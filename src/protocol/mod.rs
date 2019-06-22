@@ -359,10 +359,11 @@ impl Protocol {
             Packet::TimeUpdate(world)              => self.time_update(world),
             Packet::SpawnPosition(world)           => self.spawn_position(world),
             Packet::PlayerPositionAndLook(player)  => self.player_pos_look(player),
+            Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
             Packet::PlayerAbilities(player)        => self.player_abilities(player),
             Packet::ChunkData(coord, chunk_map)    => self.chunk_data(coord, chunk_map),
-            Packet::ServerDifficulty()             => self.server_difficulty(Difficulty::Normal), // TODO: change
-            Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
+            Packet::ServerDifficulty(difficulty)   => self.server_difficulty(difficulty),
+            Packet::ResourcePackSend(url, hash)    => self.resource_pack_send(&url, &hash),
 
             Packet::Disconnect(reason)             => self.disconnect(&reason)
         };
@@ -578,6 +579,8 @@ impl Protocol {
     }
 
     fn set_compression(&mut self, threshold: i32) -> Result<()> {
+        debug_assert_eq!(self.state, State::Login);
+
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x03).unwrap(); // Login Success packet
 
@@ -945,6 +948,19 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
+    /// https://wiki.vg/index.php?title=Protocol&oldid=7368#Change_Game_State
+    fn change_game_state(&mut self, reason: GameStateReason, value: f32) -> Result<()> {
+        debug_assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x2B).unwrap(); // Change Game State packet
+
+        wbuf.write_ubyte(reason as u8).unwrap(); // Reason
+        wbuf.write_float(value).unwrap(); // Value
+
+        self.write_packet(&wbuf)
+    }
+
     fn player_abilities(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
@@ -991,16 +1007,14 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
-
-    /// https://wiki.vg/index.php?title=Protocol&oldid=7368#Change_Game_State
-    fn change_game_state(&mut self, reason: GameStateReason, value: f32) -> Result<()> {
+    fn resource_pack_send(&mut self, url: &str, hash: &str) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
-        wbuf.write_var_int(0x2B).unwrap(); // Change Game State packet
+        wbuf.write_var_int(0x48).unwrap(); // Resource Pack Send packet
 
-        wbuf.write_ubyte(reason as u8).unwrap(); // Reason
-        wbuf.write_float(value).unwrap(); // Value
+        wbuf.write_string(url).unwrap(); // URL
+        wbuf.write_string(hash).unwrap(); // Hash
 
         self.write_packet(&wbuf)
     }

@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::entities::player::Player;
 use crate::protocol::GameStateReason;
-use crate::storage::world::World;
+use crate::storage::world::{Difficulty, World};
 use crate::storage::chunk::ChunkCoord;
 use crate::storage::chunk::chunk_map::ChunkMap;
 
@@ -25,9 +25,11 @@ pub enum Packet {
     /// Primary Bit Mask, Chunk Data
     ChunkData(ChunkCoord, Arc<ChunkMap>),
     ///
-    ServerDifficulty(),
+    ServerDifficulty(Difficulty),
     ///
     ChangeGameState(GameStateReason, f32),
+    ///
+    ResourcePackSend(String, String),
 
     // Other
     /// Reason

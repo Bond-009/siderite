@@ -10,6 +10,7 @@ use crate::protocol::DigStatus;
 use crate::protocol::packets::Packet;
 use crate::server::Server;
 use crate::storage::chunk::{ChunkCoord, Coord};
+use crate::storage::world::Difficulty;
 
 pub struct Client {
     id: i32,
@@ -77,7 +78,7 @@ impl Client {
 
         prot.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
         prot.send(Packet::SpawnPosition(world.clone())).unwrap();
-        prot.send(Packet::ServerDifficulty()).unwrap();
+        prot.send(Packet::ServerDifficulty(Difficulty::Normal)).unwrap();
         prot.send(Packet::PlayerAbilities(player.clone())).unwrap();
 
         for x in -3..3 {
