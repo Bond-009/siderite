@@ -110,8 +110,7 @@ impl Server {
         }))));
     }
 
-    pub fn try_load_player(&self, client_id: i32) -> Arc<RwLock<Player>>{
-        let client = self.get_client(client_id).unwrap();
+    pub fn try_load_player(&self, client: Arc<RwLock<Client>>) -> Arc<RwLock<Player>>{
         // TODO: Try load player
 
         let world = self.worlds[0].clone();
@@ -142,12 +141,15 @@ impl Server {
             self.kick_user(client_id, "The server is currently full.");
             return;
         }
+
         info!("Authenticated user {}", username);
 
-        let client = self.get_client(client_id).unwrap();
-        client.write().unwrap().auth(username, uuid, properties);
-        let player = self.try_load_player(client_id);
-        client.read().unwrap().finish_auth(player);
+        let client_arc = self.get_client(client_id).unwrap();
+        let client_arc_clone = client_arc.clone();
+        let mut client = client_arc.write().unwrap();
+        client.auth(username, uuid, properties);
+        let player = self.try_load_player(client_arc_clone);
+        client.finish_auth(player);
     }
 
     pub fn kick_user(&self, client_id: i32, reason: &str) {
