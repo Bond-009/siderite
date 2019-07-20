@@ -7,7 +7,7 @@ use env_logger;
 use log::*;
 use siderite_core::server::*;
 
-const FAVICON_FILENAME: &'static str = "favicon.png";
+const FAVICON_FILENAME: &str = "favicon.png";
 
 fn main() {
     env_logger::init();

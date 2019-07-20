@@ -53,7 +53,7 @@ pub struct Server {
 
 impl Server {
 
-    pub fn get_description<'a>(&'a self) -> &'a str {
+    pub fn get_description(&self) -> &str {
         &self.description
     }
 
@@ -61,7 +61,7 @@ impl Server {
         self.max_players
     }
 
-    pub fn get_favicon<'a>(&'a self) -> &'a str {
+    pub fn get_favicon(&self) -> &str {
         &self.favicon
     }
 
@@ -69,15 +69,15 @@ impl Server {
         self.authenticate
     }
 
-    pub fn get_private_key<'a>(&'a self) -> &'a Rsa<Private> {
+    pub fn get_private_key(&self) -> &Rsa<Private> {
         &self.private_key
     }
 
-    pub fn get_id<'a>(&'a self) -> &'a str {
+    pub fn get_id(&self) -> &str {
         &self.id
     }
 
-    pub fn get_public_key_der<'a>(&'a self) -> &'a [u8] {
+    pub fn get_public_key_der(&self) -> &[u8] {
         &self.public_key_der
     }
 

@@ -51,7 +51,7 @@ impl Authenticator {
 
 // TODO: move
 pub fn java_hex_digest(mut input: [u8; 20]) -> String {
-    const CHARS: &'static [u8; 16] = b"0123456789abcdef";
+    const CHARS: &[u8; 16] = b"0123456789abcdef";
     let hex = |byte: u8| { CHARS[byte as usize] };
 
     // The max size is 2 * the length of the input array + 1 for the possible '-' sign
