@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 circbuf = "0.1.4"
-hex = "0.3.2"
 log = "^0.4"
 openssl = "^0.10"
 num-derive = "^0.2"

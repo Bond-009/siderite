@@ -2,7 +2,6 @@ use std::iter::Iterator;
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use hex;
 use serde_json as json;
 use uuid::Uuid;
 
@@ -52,18 +51,42 @@ impl Authenticator {
 
 // TODO: move
 pub fn java_hex_digest(mut input: [u8; 20]) -> String {
-    let negative = (input[0] & 0x80) == 0x80;
-    if negative {
+    const CHARS: &'static [u8; 16] = b"0123456789abcdef";
+    let hex = |byte: u8| { CHARS[byte as usize] };
+
+    // The max size is 2 * the length of the input array + 1 for the possible '-' sign
+    let mut s = Vec::with_capacity(20 * 2 + 1);
+
+    if (input[0] & 0x80) == 0x80 {
         twos_compliment(&mut input);
+        s.push(b'-');
     }
-    let mut digest = hex::encode(input);
-    digest = digest.trim_start_matches('0').to_owned();
-    if negative {
-        digest.insert(0, '-');
+
+    let mut iter = input.iter();
+    // Ignore the first '0's
+    for b in &mut iter {
+        if *b == 0 {
+            continue;
+        }
+
+        if *b >= 16 {
+            s.push(hex(b>>4));
+        }
+
+        s.push(hex(b&0x0f));
+        break;
     }
-    digest
+
+    for b in iter {
+        s.push(hex(b>>4));
+        s.push(hex(b&0x0f));
+    }
+
+    // Whe know the string is valid UTF-8
+    unsafe { String::from_utf8_unchecked(s) }
 }
 
+#[inline]
 fn twos_compliment(arr: &mut [u8]) {
     let mut carry = true;
     for i in (0..arr.len()).rev() {
