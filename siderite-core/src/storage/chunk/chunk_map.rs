@@ -5,7 +5,9 @@ use crate::storage::chunk::*;
 use crate::storage::chunk::section::Section;
 
 pub struct ChunkMap {
-    chunks: RwLock<HashMap<ChunkCoord, Chunk>>
+    // REVIEW: currently we box up the chunks because
+    // without they overflow the stack when inserting to the hashmap in debug mode
+    chunks: RwLock<HashMap<ChunkCoord, Box<Chunk>>>
 }
 
 impl ChunkMap {
@@ -40,7 +42,7 @@ impl ChunkMap {
         }
 
         // TODO: load/generate chunk
-        let chunk = Chunk {
+        let chunk = Box::new(Chunk {
             data: ChunkColumn {
                 sections: [
                     Some(Section {
@@ -66,7 +68,7 @@ impl ChunkMap {
                     None
                 ]},
             biome_map: [1; AREA as usize]
-        };
+        });
 
         let mut chunks = self.chunks.write().unwrap();
         chunks.insert(coord, chunk);
