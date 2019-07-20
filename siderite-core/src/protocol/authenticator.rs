@@ -3,14 +3,13 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 
 use hex;
-use mojang::auth_with_yggdrasil;
 use serde_json as json;
 use uuid::Uuid;
 
 use crate::server::Server;
 
 pub struct AuthInfo {
-    pub client_id: i32,
+    pub client_id: u32,
     pub username: String,
     pub server_id: Option<String>
 }
@@ -37,17 +36,17 @@ impl Authenticator {
     }
 
     fn handle_request(&self, info: AuthInfo) {
-        if !self.server.should_authenticate() {
-            // TODO: check if UUID is compatible with vanilla
-            let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
-            self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
+        if self.server.should_authenticate() {
+            let res = mojang::auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
+            let uuid = Uuid::parse_str(&res.id).unwrap();
+
+            self.server.auth_user(info.client_id, res.name, uuid, res.properties);
             return;
         }
 
-        let res = auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
-        let uuid = Uuid::parse_str(&res.id).unwrap();
-        
-        self.server.auth_user(info.client_id, res.name, uuid, res.properties);
+        // TODO: check if UUID is compatible with vanilla
+        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
+        self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
     }
 }
 

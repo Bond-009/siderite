@@ -27,6 +27,7 @@ use uuid::adapter::Hyphenated;
 use crate::blocks::BlockFace;
 use crate::client::Client;
 use crate::entities::player::{GameMode, Player};
+use crate::server;
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
 use crate::storage::chunk::{Chunk, ChunkCoord, Coord, SerializeChunk};
@@ -92,6 +93,7 @@ pub enum DigStatus {
 
 pub struct Protocol {
     server: Arc<Server>,
+    client_id: u32,
     client: Arc<RwLock<Client>>,
     authenticator: Sender<AuthInfo>,
     receiver: Receiver<Packet>,
@@ -110,12 +112,15 @@ pub struct Protocol {
 
 impl Protocol {
 
-    pub fn new(client_id: i32, server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Protocol {
+    pub fn new(server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Protocol {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
         thread_rng().fill(&mut arr[..]);
         let (tx, rx) = mpsc::channel();
+        // The player will get the same ID as the client
+        let client_id = server::get_next_entity_id();
         Protocol {
             server: server.clone(),
+            client_id,
             client: Arc::new(RwLock::new(Client::new(client_id, server, tx))), // TODO: proper client id
             receiver: rx,
             authenticator,
@@ -133,8 +138,8 @@ impl Protocol {
         }
     }
 
-    pub fn get_client(&self) -> Arc<RwLock<Client>> {
-        self.client.clone()
+    pub fn get_client(&self) -> (u32, Arc<RwLock<Client>>) {
+        (self.client_id, self.client.clone())
     }
 
     pub fn is_disconnected(&self) -> bool {

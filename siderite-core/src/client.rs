@@ -13,7 +13,7 @@ use crate::storage::chunk::{ChunkCoord, Coord};
 use crate::storage::world::Difficulty;
 
 pub struct Client {
-    id: i32,
+    id: u32,
     pub username: Option<String>,
     uuid: Option<Uuid>,
     properties: json::Value,
@@ -26,7 +26,7 @@ pub struct Client {
 
 impl Client {
 
-    pub fn new(id: i32, server: Arc<Server>, protocol: Sender<Packet>) -> Client {
+    pub fn new(id: u32, server: Arc<Server>, protocol: Sender<Packet>) -> Client {
          Client {
             id,
             username: None,
@@ -44,7 +44,7 @@ impl Client {
         self.server.clone()
     }
 
-    pub fn get_id(&self) -> i32 {
+    pub fn get_id(&self) -> u32 {
         self.id
     }
 

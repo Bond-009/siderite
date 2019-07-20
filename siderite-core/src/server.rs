@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
-use std::sync::{Arc, Mutex, RwLock};
-use std::{thread};
+use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::*;
 use openssl::pkey::Private;
@@ -14,6 +15,12 @@ use crate::protocol::Protocol;
 use crate::protocol::authenticator::Authenticator;
 use crate::protocol::thread::ProtocolThread;
 use crate::storage::world::*;
+
+static ENTITY_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+pub fn get_next_entity_id() -> u32 {
+    ENTITY_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 pub struct ServerConfig {
     pub port: u16,
@@ -30,7 +37,7 @@ pub struct Server {
     // The first world in the vec is the default world
     worlds: Vec<Arc<RwLock<World>>>,
     // Clients that aren't assigned a world yet
-    clients: Mutex<Vec<Arc<RwLock<Client>>>>,
+    clients: RwLock<HashMap<u32, Arc<RwLock<Client>>>>,
 
     description: String,
     max_players: i32,
@@ -46,38 +53,31 @@ pub struct Server {
 
 impl Server {
 
-    pub fn get_description<'a>(&'a self) -> &'a str
-    {
+    pub fn get_description<'a>(&'a self) -> &'a str {
         &self.description
     }
 
-    pub fn get_max_players(&self) -> i32
-    {
+    pub fn get_max_players(&self) -> i32 {
         self.max_players
     }
 
-    pub fn get_favicon<'a>(&'a self) -> &'a str
-    {
+    pub fn get_favicon<'a>(&'a self) -> &'a str {
         &self.favicon
     }
 
-    pub fn should_authenticate(&self) -> bool
-    {
+    pub fn should_authenticate(&self) -> bool {
         self.authenticate
     }
 
-    pub fn get_private_key<'a>(&'a self) -> &'a Rsa<Private>
-    {
+    pub fn get_private_key<'a>(&'a self) -> &'a Rsa<Private> {
         &self.private_key
     }
 
-    pub fn get_id<'a>(&'a self) -> &'a str
-    {
+    pub fn get_id<'a>(&'a self) -> &'a str {
         &self.id
     }
 
-    pub fn get_public_key_der<'a>(&'a self) -> &'a [u8]
-    {
+    pub fn get_public_key_der<'a>(&'a self) -> &'a [u8] {
         &self.public_key_der
     }
 
@@ -89,7 +89,7 @@ impl Server {
             id: String::new(),
 
             worlds: Vec::new(),
-            clients: Mutex::new(Vec::new()),
+            clients: RwLock::new(HashMap::new()),
 
             description: config.description,
             max_players: config.max_players,
@@ -114,26 +114,20 @@ impl Server {
         info!("Started server");
 
         for connection in listener.incoming() {
-            let consvr = svr.clone();
-            let ps_c = ps.clone();
-            let auth_c = auth.clone();
-            thread::spawn(move || {
-                info!("Incomming connection!");
-                let mut stream = connection.unwrap();
-                if Protocol::legacy_ping(&mut stream) {
-                    return;
-                }
+            info!("Incomming connection!");
+            let mut stream = connection.unwrap();
+            if Protocol::legacy_ping(&mut stream) {
+                return;
+            }
 
-                stream.set_nonblocking(true).expect("set_nonblocking call failed");
+            stream.set_nonblocking(true).expect("set_nonblocking call failed");
 
-                let mut clients = consvr.clients.lock().unwrap();
-                let client_id = clients.len() as i32;
-                let prot = Protocol::new(client_id, consvr.clone(), stream, auth_c);
-                let client = prot.get_client();
-                ps_c.send(prot).unwrap();
+            let prot = Protocol::new(svr.clone(), stream, auth.clone());
+            let client = prot.get_client();
+            ps.send(prot).unwrap();
 
-                clients.push(client);
-            });
+            let mut clients = svr.clients.write().unwrap();
+            clients.insert(client.0, client.1);
         }
     }
 
@@ -153,11 +147,21 @@ impl Server {
         Arc::new(RwLock::new(Player::new(client, world)))
     }
 
-    fn get_client(&self, client_id: i32) -> Option<Arc<RwLock<Client>>> {
-        for client in self.clients.lock().unwrap().iter() {
-            if client.read().unwrap().get_id() == client_id {
-                return Some(client.clone());
-            }
+    pub fn do_with_client(&self, client_id: u32, function: &dyn Fn(&Arc<RwLock<Client>>) -> bool) -> bool {
+        let clients = self.clients.read().unwrap();
+
+        if let Some(client) = clients.get(&client_id) {
+            return function(client);
+        }
+
+        false
+    }
+
+    pub fn get_client(&self, client_id: u32) -> Option<Arc<RwLock<Client>>> {
+        let clients = self.clients.read().unwrap();
+
+        if let Some(client) = clients.get(&client_id) {
+            return Some(client.clone());
         }
 
         None
@@ -172,7 +176,7 @@ impl Server {
         players as i32
     }
 
-    pub fn auth_user(&self, client_id: i32, username: String, uuid: Uuid, properties: json::Value) {
+    pub fn auth_user(&self, client_id: u32, username: String, uuid: Uuid, properties: json::Value) {
         if self.online_players() >= self.max_players {
             self.kick_user(client_id, "The server is currently full.");
             return;
@@ -188,12 +192,10 @@ impl Server {
         client.finish_auth(player);
     }
 
-    pub fn kick_user(&self, client_id: i32, reason: &str) {
-        for client in self.clients.lock().unwrap().iter() {
-            if client.read().unwrap().get_id() == client_id {
-                client.write().unwrap().kick(reason);
-                return;
-            }
-        }
+    pub fn kick_user(&self, client_id: u32, reason: &str) {
+        self.do_with_client(client_id, &|client: &Arc<RwLock<Client>>| {
+            client.write().unwrap().kick(reason);
+            true
+        });
     }
 }
