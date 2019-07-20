@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use num_derive::FromPrimitive;
+
 use crate::entities::player::Player;
 use crate::storage::chunk::chunk_map::ChunkMap;
 

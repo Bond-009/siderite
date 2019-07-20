@@ -37,7 +37,7 @@ impl Authenticator {
     }
 
     fn handle_request(&self, info: AuthInfo) {
-        if !self.server.authenticate {
+        if !self.server.should_authenticate() {
             // TODO: check if UUID is compatible with vanilla
             let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
             self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);

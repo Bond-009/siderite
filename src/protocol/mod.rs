@@ -13,12 +13,15 @@ use circbuf::CircBuf;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+use log::*;
 use mcrw::{MCReadExt, MCWriteExt};
+use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
 use openssl::sha;
 use openssl::symm::{Cipher, decrypt};
 use rand::{thread_rng, Rng};
+use serde_json::json;
 use uuid::adapter::Hyphenated;
 
 use crate::blocks::BlockFace;
@@ -51,7 +54,7 @@ enum State {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
+#[derive(Copy, Clone, Debug, FromPrimitive)]
 pub enum GameStateReason {
     /// Bed can't be used as a spawn point
     InvalidBed = 0,
@@ -77,7 +80,7 @@ pub enum GameStateReason {
 }
 
 #[repr(i8)]
-#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
+#[derive(Copy, Clone, Debug, FromPrimitive)]
 pub enum DigStatus {
     StartedDigging = 0,
     CancelledDigging = 1,
@@ -415,7 +418,7 @@ impl Protocol {
     // Status packets:
 
     fn handle_request(&mut self) {
-        assert_eq!(self.state, State::Status);
+        debug_assert_eq!(self.state, State::Status);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x00).unwrap();
@@ -426,7 +429,7 @@ impl Protocol {
                 "protocol": 47
             },
             "players": {
-                "max": self.server.max_players,
+                "max": self.server.get_max_players(),
                 "online": self.server.online_players(),
                 "sample": [
                     {
@@ -436,7 +439,7 @@ impl Protocol {
                 ]
             },
             "description": {
-                "text": self.server.description,
+                "text": self.server.get_description(),
             },
             //"favicon": "data:image/png;base64,"
         });
@@ -446,7 +449,7 @@ impl Protocol {
     }
 
     fn handle_ping(&mut self, mut rbuf: &[u8]) {
-        assert_eq!(self.state, State::Status);
+        debug_assert_eq!(self.state, State::Status);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap();
@@ -461,7 +464,7 @@ impl Protocol {
     fn handle_login_start(&mut self, mut rbuf: &[u8]) {
         let username = rbuf.read_string().unwrap();
 
-        if self.server.authenticate {
+        if self.server.should_authenticate() {
             self.encryption_request();
 
             self.client.write().unwrap().username = Some(username);
@@ -488,7 +491,7 @@ impl Protocol {
 
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
-        let vtd_len = self.server.private_key.private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
+        let vtd_len = self.server.get_private_key().private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
         if vtd_len != VERIFY_TOKEN_LEN {
             debug!("Verify Token is the wrong length: expected {}, got {}", VERIFY_TOKEN_LEN, vtd_len);
             self.disconnect("Hacked client").unwrap();
@@ -503,7 +506,7 @@ impl Protocol {
 
         // Decrypt Shared Secret Key
         let mut ssdvec = vec![0; ss_len];
-        let ssd_len = self.server.private_key.private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
+        let ssd_len = self.server.get_private_key().private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
         if ssd_len != ENCRYPTION_KEY_LEN {
             debug!("Shared Secret Key is the wrong length: expected {}, got {}", ENCRYPTION_KEY_LEN, ssd_len);
             self.disconnect("Hacked client").unwrap();
@@ -518,9 +521,9 @@ impl Protocol {
         // self.crypter = Some(crypter);
 
         let mut hasher = sha::Sha1::new();
-        hasher.update(self.server.id.as_bytes());
+        hasher.update(self.server.get_id().as_bytes());
         hasher.update(&self.encryption_key);
-        hasher.update(&self.server.public_key_der);
+        hasher.update(&self.server.get_public_key_der());
         let hash = hasher.finish();
         let server_id = authenticator::java_hex_digest(hash);
 
@@ -539,10 +542,11 @@ impl Protocol {
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Encryption Request packet
-        wbuf.write_string(&self.server.id).unwrap();
+        wbuf.write_string(&self.server.get_id()).unwrap();
         // Public Key
-        wbuf.write_var_int(self.server.public_key_der.len() as i32).unwrap();
-        wbuf.write_all(&self.server.public_key_der).unwrap();
+        let public_key_der = self.server.get_public_key_der();
+        wbuf.write_var_int(public_key_der.len() as i32).unwrap();
+        wbuf.write_all(public_key_der).unwrap();
         // Verify Token
         wbuf.write_var_int(self.verify_token.len() as i32).unwrap();
         wbuf.write_all(&self.verify_token).unwrap();
@@ -868,7 +872,7 @@ impl Protocol {
             wbuf.write_byte(w.get_dimension() as i8).unwrap(); // Dimension
             wbuf.write_ubyte(w.get_difficulty() as u8).unwrap(); // Difficulty
         }
-        let max_players = self.server.max_players;
+        let max_players = self.server.get_max_players();
 
         wbuf.write_ubyte(max_players as u8).unwrap(); // Max players
         wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)

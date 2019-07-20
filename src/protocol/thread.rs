@@ -3,6 +3,7 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+use crate::TICK_DURATION;
 use crate::protocol::Protocol;
 
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_millis(1000);
@@ -26,7 +27,7 @@ impl ProtocolThread {
 
             loop {
                 thread.tick();
-                thread::sleep(Duration::from_millis(20));
+                thread::sleep(TICK_DURATION);
             }
         });
 

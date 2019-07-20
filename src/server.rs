@@ -2,6 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::{Arc, Mutex, RwLock};
 use std::{thread};
 
+use log::*;
 use openssl::pkey::Private;
 use openssl::rsa::Rsa;
 use serde_json as json;
@@ -24,26 +25,61 @@ pub struct ServerConfig {
 }
 
 pub struct Server {
-    pub id: String,
+    id: String,
 
     // The first world in the vec is the default world
-    pub worlds: Vec<Arc<RwLock<World>>>,
+    worlds: Vec<Arc<RwLock<World>>>,
     // Clients that aren't assigned a world yet
     clients: Mutex<Vec<Arc<RwLock<Client>>>>,
 
-    pub description: String,
-    pub max_players: i32,
-    pub favicon: String,
+    description: String,
+    max_players: i32,
+    favicon: String,
 
     port: u16,
 
-    pub authenticate: bool,
+    authenticate: bool,
 
-    pub public_key_der: Vec<u8>,
-    pub private_key: Rsa<Private>
+    public_key_der: Vec<u8>,
+    private_key: Rsa<Private>
 }
 
 impl Server {
+
+    pub fn get_description<'a>(&'a self) -> &'a str
+    {
+        &self.description
+    }
+
+    pub fn get_max_players(&self) -> i32
+    {
+        self.max_players
+    }
+
+    pub fn get_favicon<'a>(&'a self) -> &'a str
+    {
+        &self.favicon
+    }
+
+    pub fn should_authenticate(&self) -> bool
+    {
+        self.authenticate
+    }
+
+    pub fn get_private_key<'a>(&'a self) -> &'a Rsa<Private>
+    {
+        &self.private_key
+    }
+
+    pub fn get_id<'a>(&'a self) -> &'a str
+    {
+        &self.id
+    }
+
+    pub fn get_public_key_der<'a>(&'a self) -> &'a [u8]
+    {
+        &self.public_key_der
+    }
 
     pub fn new(config: ServerConfig) -> Server {
         let rsa = Rsa::generate(1024).unwrap();

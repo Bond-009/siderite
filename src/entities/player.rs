@@ -1,5 +1,7 @@
 use std::sync::{Arc, RwLock};
 
+use num_derive::FromPrimitive;
+
 use crate::client::Client;
 use crate::storage::world::World;
 

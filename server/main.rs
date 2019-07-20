@@ -1,6 +1,3 @@
-extern crate env_logger;
-extern crate siderite;
-
 use std::sync::Arc;
 
 use siderite::server::*;

@@ -1,19 +1,3 @@
-extern crate circbuf;
-extern crate flate2;
-extern crate hex;
-#[macro_use]
-extern crate log;
-extern crate openssl;
-extern crate mcrw;
-extern crate mojang;
-#[macro_use]
-extern crate num_derive;
-extern crate num_traits;
-#[macro_use]
-extern crate serde_json;
-extern crate rand;
-extern crate uuid;
-
 pub mod blocks;
 pub mod entities;
 pub mod server;
@@ -21,3 +5,11 @@ pub mod storage;
 
 mod client;
 mod protocol;
+
+use std::time::Duration;
+
+/// Number of ticks per second
+pub const TPS: i32 = 20;
+
+/// Duration between ticks
+pub const TICK_DURATION: Duration = Duration::from_millis(1000 / TPS as u64);

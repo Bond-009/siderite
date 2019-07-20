@@ -1,3 +1,5 @@
+use num_derive::FromPrimitive;
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
 pub enum BlockType {
