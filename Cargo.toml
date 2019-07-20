@@ -6,39 +6,13 @@ keywords = ["siderite", "minecraft", "server"]
 repository = "https://github.com/Bond-009/siderite.git"
 edition = "2018"
 
-[[bin]]
-name = "siderite"
-path = "server/main.rs"
-doc = false
-test = false
-bench = false
-
-[lib]
-name = "siderite"
-path = "src/lib.rs"
+[profile.release]
+lto = true
 
 [dependencies]
-circbuf = "0.1.4"
+base64 = "^0.10"
 env_logger = "^0.6"
-hex = "0.3.2"
 log = "^0.4"
-openssl = "^0.10"
-num-derive = "^0.2"
-num-traits = "^0.2"
-rand = "^0.7"
-serde_json = "^1.0"
 
-[dependencies.flate2]
-version = "^1.0"
-default-features = false
-features = ["zlib"]
-
-[dependencies.uuid]
-version = "^0.7"
-features = ["v3"]
-
-[dependencies.mcrw]
-git = "https://gitlab.com/siderite/mcrw.git"
-
-[dependencies.mojang]
-git = "https://gitlab.com/siderite/mojang-rs.git"
+[dependencies.siderite-core]
+path = "siderite-core"

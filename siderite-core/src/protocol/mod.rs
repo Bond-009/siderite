@@ -422,8 +422,7 @@ impl Protocol {
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x00).unwrap();
-        // TODO: Add favicon and sample
-        let response = json!({
+        let mut response = json!({
             "version": {
                 "name": "1.8.9",
                 "protocol": 47
@@ -441,9 +440,17 @@ impl Protocol {
             "description": {
                 "text": self.server.get_description(),
             },
-            //"favicon": "data:image/png;base64,"
         });
+        let favicon = self.server.get_favicon();
+        if !favicon.is_empty()
+        {
+            response.as_object_mut().unwrap().insert(
+                "favicon".to_owned(),
+                json!(format!("data:image/png;base64,{}", favicon)));
+        }
+
         let strres = response.to_string();
+        debug!("{}", strres);
         wbuf.write_string(&strres).unwrap();
         self.write_packet(&wbuf).unwrap();
     }
