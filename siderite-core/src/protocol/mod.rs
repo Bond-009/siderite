@@ -24,6 +24,7 @@ use rand::{thread_rng, Rng};
 use serde_json::json;
 use uuid::adapter::Hyphenated;
 
+use crate::var_int_size;
 use crate::blocks::BlockFace;
 use crate::client::Client;
 use crate::entities::player::{GameMode, Player};
@@ -396,7 +397,7 @@ impl Protocol {
             let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
             e.write_all(rbuf)?;
             let buf = e.finish()?;
-            self.stream.write_var_int(Protocol::var_int_len(length) + buf.len() as i32)?;
+            self.stream.write_var_int(var_int_size(length) + buf.len() as i32)?;
             self.stream.write_var_int(length)?;
             self.stream.write_all(&buf)?;
         } else {
@@ -1070,18 +1071,5 @@ impl Protocol {
             || e == ErrorKind::ConnectionAborted
             || e == ErrorKind::ConnectionRefused
             || e == ErrorKind::BrokenPipe
-    }
-
-    fn var_int_len(value: i32) -> i32 {
-        let mut temp = value as u32;
-        let mut ret = 1;
-        loop {
-            if (temp & !0x7f) == 0 {
-                return ret;
-            } else {
-                ret += 1;
-                temp >>= 7;
-            }
-        }
     }
 }

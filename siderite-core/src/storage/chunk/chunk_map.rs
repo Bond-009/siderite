@@ -38,7 +38,7 @@ impl ChunkMap {
                 return;
             }
         }
-        
+
         // TODO: load/generate chunk
         let chunk = Chunk {
             data: ChunkColumn {
