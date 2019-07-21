@@ -29,7 +29,7 @@ fn main() {
         description: "A custom MC server".to_owned(),
         max_players: 10,
         favicon,
-        authentication: false,
+        authentication: true,
     });
     server.load_worlds();
     let server_ref = Arc::new(server);

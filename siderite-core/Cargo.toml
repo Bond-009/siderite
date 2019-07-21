@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 circbuf = "0.1.4"
+lazy_static = "^1.3"
 log = "^0.4"
 openssl = "^0.10"
 num-derive = "^0.2"
@@ -22,6 +23,7 @@ features = ["zlib"]
 
 [dependencies.uuid]
 version = "^0.7"
+default-features = false
 features = ["v3"]
 
 [dependencies.mcrw]

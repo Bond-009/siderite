@@ -14,7 +14,7 @@ use crate::storage::world::Difficulty;
 
 pub struct Client {
     id: u32,
-    pub username: Option<String>,
+    username: Option<String>,
     uuid: Option<Uuid>,
     properties: json::Value,
 
@@ -50,6 +50,17 @@ impl Client {
 
     pub fn get_uuid(&self) -> Option<Uuid> {
         self.uuid
+    }
+
+    pub fn get_username(&self) -> Option<&str> {
+        match &self.username {
+            Some(v) => Some(&v),
+            None => None
+        }
+    }
+
+    pub fn set_username(&mut self, username: String) {
+        self.username = Some(username);
     }
 
     pub fn kick(&self, reason: &str) {

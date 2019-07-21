@@ -123,11 +123,11 @@ impl Server {
             stream.set_nonblocking(true).expect("set_nonblocking call failed");
 
             let prot = Protocol::new(svr.clone(), stream, auth.clone());
-            let client = prot.get_client();
+            let (client_id, client) = prot.get_client();
             ps.send(prot).unwrap();
 
             let mut clients = svr.clients.write().unwrap();
-            clients.insert(client.0, client.1);
+            clients.insert(client_id, client);
         }
     }
 

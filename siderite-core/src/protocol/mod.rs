@@ -13,13 +13,15 @@ use circbuf::CircBuf;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+use lazy_static::lazy_static;
 use log::*;
 use mcrw::{MCReadExt, MCWriteExt};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
 use openssl::sha;
-use openssl::symm::{Cipher, decrypt};
+use openssl::symm::{Cipher, Crypter, Mode};
+
 use rand::{thread_rng, Rng};
 use serde_json::json;
 use uuid::adapter::Hyphenated;
@@ -39,8 +41,19 @@ use self::packets::Packet;
 
 /// Maximum size of a packet before its compressed
 const COMPRESSION_THRESHOLD: i32 = 256;
+
+/// The length of the verify token
 const VERIFY_TOKEN_LEN: usize = 4;
+
+/// The length of the encryption key
 const ENCRYPTION_KEY_LEN: usize = 16;
+
+const PADDING: Padding = Padding::PKCS1;
+
+lazy_static! {
+    /// AES/CFB8 cipher used by minecraft
+    static ref CIPHER: Cipher = Cipher::aes_128_cfb8();
+}
 
 /// Maximum duration in between keep alive packets from the client
 const KEEP_ALIVE_MAX: Duration = Duration::from_secs(30);
@@ -106,9 +119,9 @@ pub struct Protocol {
 
     last_keep_alive: SystemTime,
 
-    encrypted: bool,
     verify_token: [u8; VERIFY_TOKEN_LEN],
-    encryption_key: [u8; ENCRYPTION_KEY_LEN]
+    encryption_key: [u8; ENCRYPTION_KEY_LEN],
+    crypter: Option<(Crypter, Crypter)>
 }
 
 impl Protocol {
@@ -133,9 +146,9 @@ impl Protocol {
 
             last_keep_alive: SystemTime::now(),
 
-            encrypted: false,
             verify_token: arr,
-            encryption_key: [0u8; ENCRYPTION_KEY_LEN]
+            encryption_key: [0u8; ENCRYPTION_KEY_LEN],
+            crypter: None
         }
     }
 
@@ -229,11 +242,15 @@ impl Protocol {
         let mut vec = vec![0u8; len];
         self.stream.read_exact(&mut vec).unwrap();
 
-        if self.encrypted {
-            vec = decrypt(Cipher::aes_128_cfb8(), &self.encryption_key, Some(&self.encryption_key), &vec).unwrap();
+        match &mut self.crypter {
+            Some((_, de)) => {
+                let mut dvec = vec![0u8; len];
+                let dlen = de.update(&vec, &mut dvec).unwrap();
+                self.received_data.write_all(&dvec[..dlen]).unwrap();
+            },
+            None => self.received_data.write_all(&vec).unwrap()
         }
 
-        self.received_data.write_all(&vec).unwrap();
         self.handle_in_packets();
     }
 
@@ -387,23 +404,46 @@ impl Protocol {
         let length = rbuf.len() as i32;
         // debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, length, rbuf[0]);
 
-        if !self.compressed {
-            self.stream.write_var_int(length)?; // Write packet length
-            self.stream.write_all(&rbuf)?; // Write packet data
-            return Ok(());
-        }
+        match &mut self.crypter {
+            Some((en, _)) => {
+                let mut buf = vec!(0; rbuf.len() + 10);
+                if !self.compressed {
+                    buf.write_var_int(length)?; // Write packet length
+                    buf.write_all(&rbuf)?; // Write packet data
+                } else if length > COMPRESSION_THRESHOLD {
+                    let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
+                    zen.write_all(rbuf)?;
+                    let comp_buf = zen.finish()?;
+                    buf.write_var_int(var_int_size(length) + comp_buf.len() as i32)?;
+                    buf.write_var_int(length)?;
+                    buf.write_all(&comp_buf)?;
+                } else {
+                    buf.write_var_int(length + 1)?; // Write packet length
+                    buf.write_var_int(0)?;
+                    buf.write_all(&rbuf)?;
+                }
 
-        if length > COMPRESSION_THRESHOLD {
-            let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
-            e.write_all(rbuf)?;
-            let buf = e.finish()?;
-            self.stream.write_var_int(var_int_size(length) + buf.len() as i32)?;
-            self.stream.write_var_int(length)?;
-            self.stream.write_all(&buf)?;
-        } else {
-            self.stream.write_var_int(length + 1)?; // Write packet length
-            self.stream.write_var_int(0)?;
-            self.stream.write_all(&rbuf)?;
+                let mut enc_buf = vec![0; buf.len() + 128];
+                let enc_len = en.update(&buf, &mut enc_buf).unwrap();
+                self.stream.write_all(&enc_buf[..enc_len])?;
+            },
+            None => {
+                if !self.compressed {
+                    self.stream.write_var_int(length)?; // Write packet length
+                    self.stream.write_all(&rbuf)?; // Write packet data
+                } else if length > COMPRESSION_THRESHOLD {
+                    let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
+                    zen.write_all(rbuf)?;
+                    let comp_buf = zen.finish()?;
+                    self.stream.write_var_int(var_int_size(length) + comp_buf.len() as i32)?;
+                    self.stream.write_var_int(length)?;
+                    self.stream.write_all(&comp_buf)?;
+                } else {
+                    self.stream.write_var_int(length + 1)?; // Write packet length
+                    self.stream.write_var_int(0)?;
+                    self.stream.write_all(&rbuf)?;
+                }
+            }
         }
 
         Ok(())
@@ -480,7 +520,7 @@ impl Protocol {
         if self.server.should_authenticate() {
             self.encryption_request();
 
-            self.client.write().unwrap().username = Some(username);
+            self.client.write().unwrap().set_username(username);
         }
         else {
             self.authenticator.send(AuthInfo {
@@ -493,18 +533,18 @@ impl Protocol {
 
     fn handle_encryption_response(&mut self, mut rbuf: &[u8]) {
         let ss_len = rbuf.read_var_int().unwrap() as usize; // Shared Secret Key Length
-        debug!("ss_len {}", ss_len);
         let mut ssarr = vec![0u8; ss_len];
         rbuf.read_exact(&mut ssarr).unwrap(); // Shared Secret
         
         let vt_len = rbuf.read_var_int().unwrap() as usize; // Verify Token Length
-        debug!("vt_len {}", vt_len);
         let mut vtarr = vec![0u8; vt_len];
         rbuf.read_exact(&mut vtarr).unwrap(); // Verify Token
 
+        let private_key = self.server.get_private_key();
+
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
-        let vtd_len = self.server.get_private_key().private_decrypt(&vtarr, &mut vtdvec, Padding::PKCS1).unwrap();
+        let vtd_len = private_key.private_decrypt(&vtarr, &mut vtdvec, PADDING).unwrap();
         if vtd_len != VERIFY_TOKEN_LEN {
             debug!("Verify Token is the wrong length: expected {}, got {}", VERIFY_TOKEN_LEN, vtd_len);
             self.disconnect("Hacked client").unwrap();
@@ -519,19 +559,18 @@ impl Protocol {
 
         // Decrypt Shared Secret Key
         let mut ssdvec = vec![0; ss_len];
-        let ssd_len = self.server.get_private_key().private_decrypt(&ssarr, &mut ssdvec, Padding::PKCS1).unwrap();
+        let ssd_len = private_key.private_decrypt(&ssarr, &mut ssdvec, PADDING).unwrap();
         if ssd_len != ENCRYPTION_KEY_LEN {
             debug!("Shared Secret Key is the wrong length: expected {}, got {}", ENCRYPTION_KEY_LEN, ssd_len);
             self.disconnect("Hacked client").unwrap();
             return;
         }
 
-        // Enables AES/CFB8 encryption
         self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
-        self.encrypted = true;
-        // let mut crypter = Crypter::new(Cipher::aes_128_cfb8(), Mode::Encrypt, &self.encryption_key, Some(&self.encryption_key)).unwrap();
-        // crypter.pad(false);
-        // self.crypter = Some(crypter);
+
+        let encrypter = Crypter::new(*CIPHER, Mode::Encrypt, &self.encryption_key, Some(&self.encryption_key)).unwrap();
+        let decrypter = Crypter::new(*CIPHER, Mode::Decrypt, &self.encryption_key, Some(&self.encryption_key)).unwrap();
+        self.crypter = Some((encrypter, decrypter));
 
         let mut hasher = sha::Sha1::new();
         hasher.update(self.server.get_id().as_bytes());
@@ -541,11 +580,10 @@ impl Protocol {
         let server_id = authenticator::java_hex_digest(hash);
 
         let client = self.client.read().unwrap();
-        let username = client.username.clone().unwrap();
 
         self.authenticator.send(AuthInfo {
                 client_id: client.get_id(),
-                username,
+                username: client.get_username().unwrap().to_owned(),
                 server_id: Some(server_id)
             }).unwrap();
     }
@@ -584,7 +622,7 @@ impl Protocol {
 
             let uuid = client.get_uuid().unwrap();
             let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
-            let username = client.username.clone().unwrap();
+            let username = client.get_username().unwrap();
             debug!("uuid: {}", uuid_str);
             debug!("name: {}", username);
 

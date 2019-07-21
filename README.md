@@ -7,8 +7,8 @@ A Minecraft 1.8.9 server written in Rust. (WIP)
 State       | Status
 ------------|-------
 Handshaking | Works
-Status      | Works, but sends no favicon and a dummy sample
-Login       | Works, but encryption seems borked
+Status      | Works, but sends a dummy sample
+Login       | Works
 Play        | Handles just enough packets to not crash
 
 [travis-ci-badge]: https://travis-ci.org/Bond-009/siderite.svg?branch=master
