@@ -997,7 +997,7 @@ impl Protocol {
             let bit_mask = chunk.data.get_primary_bit_mask();
             wbuf.write_ushort(bit_mask).unwrap(); // Primary Bit Mask
 
-            chunk.serialize(&mut wbuf);
+            chunk.serialize(&mut wbuf).unwrap();
         });
 
         self.write_packet(&wbuf)

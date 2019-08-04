@@ -1,7 +1,7 @@
 pub mod section;
 pub mod chunk_map;
 
-use std::io::Write;
+use std::io::{Result, Write};
 
 use num_traits::{FromPrimitive, Num};
 
@@ -30,7 +30,7 @@ pub struct Coord<T: Num + PartialOrd + Copy> {
 
 pub trait SerializeChunk {
     fn serialized_size(&self) -> usize;
-    fn serialize<W: Write>(&self, buf: W);
+    fn serialize<W: Write>(&self, w: W) -> Result<()>;
 }
 
 pub struct ChunkColumn {
