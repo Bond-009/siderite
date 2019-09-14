@@ -378,19 +378,20 @@ impl Protocol {
 
     fn send_packet(&mut self, packet: Packet) {
         let res = match packet {
-            Packet::LoginSuccess()                 => self.login_success(),
+            Packet::LoginSuccess()                      => self.login_success(),
 
-            Packet::JoinGame(player, world)        => self.join_game(player, world),
-            Packet::TimeUpdate(world)              => self.time_update(world),
-            Packet::SpawnPosition(world)           => self.spawn_position(world),
-            Packet::PlayerPositionAndLook(player)  => self.player_pos_look(player),
-            Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
-            Packet::PlayerAbilities(player)        => self.player_abilities(player),
-            Packet::ChunkData(coord, chunk_map)    => self.chunk_data(coord, chunk_map),
-            Packet::ServerDifficulty(difficulty)   => self.server_difficulty(difficulty),
-            Packet::ResourcePackSend(url, hash)    => self.resource_pack_send(&url, &hash),
+            Packet::JoinGame(player, world)             => self.join_game(player, world),
+            Packet::TimeUpdate(world)                   => self.time_update(world),
+            Packet::SpawnPosition(world)                => self.spawn_position(world),
+            Packet::PlayerPositionAndLook(player)       => self.player_pos_look(player),
+            Packet::ChangeGameState(reason, value)      => self.change_game_state(reason, value),
+            Packet::PlayerListAddPlayer(client, player) => self.player_list_add_player(client, player),
+            Packet::PlayerAbilities(player)             => self.player_abilities(player),
+            Packet::ChunkData(coord, chunk_map)         => self.chunk_data(coord, chunk_map),
+            Packet::ServerDifficulty(difficulty)        => self.server_difficulty(difficulty),
+            Packet::ResourcePackSend(url, hash)         => self.resource_pack_send(&url, &hash),
 
-            Packet::Disconnect(reason)             => self.disconnect(&reason)
+            Packet::Disconnect(reason)                  => self.disconnect(&reason)
         };
 
         if res.is_err() {
@@ -1022,12 +1023,84 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
+    fn player_list_add_player(&mut self, client: Arc<RwLock<Client>>, player: Arc<RwLock<Player>>, ) -> Result<()> {
+        debug_assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x38).unwrap(); // Player Abilities packet
+
+        wbuf.write_var_int(0).unwrap(); // Action: add player
+        wbuf.write_var_int(1).unwrap(); // Number Of Players
+
+        {
+            let client = client.read().unwrap();
+            wbuf.write_all(client.uuid().as_bytes()).unwrap(); // UUID
+            wbuf.write_string(client.get_username().unwrap()).unwrap();
+            let properties = client.properties().as_array().unwrap();
+            wbuf.write_var_int(properties.len() as i32).unwrap();
+            for prop in properties {
+                wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
+                wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
+                match prop.get("signature") {
+                    Some(v) => {
+                        wbuf.write_bool(true).unwrap();
+                        wbuf.write_string(v.as_str().unwrap()).unwrap();
+                    },
+                    None => wbuf.write_bool(false).unwrap()
+                }
+            }
+        }
+        {
+            let player = player.read().unwrap();
+            wbuf.write_var_int(player.gm() as i32).unwrap(); // Gamemode
+        }
+
+        // TODO: calculate actual ping
+        wbuf.write_var_int(250).unwrap(); // Ping
+
+        wbuf.write_bool(false).unwrap(); //  Has Display Name
+
+        self.write_packet(&wbuf)
+    }
+/*
+    void cProtocol_1_8_0::SendPlayerListAddPlayer(const cPlayer & a_Player)
+{
+	ASSERT(m_State == 3);  // In game mode?
+
+	cPacketizer Pkt(*this, 0x38);  // Playerlist Item packet
+	Pkt.WriteVarInt32(0);
+	Pkt.WriteVarInt32(1);
+	Pkt.WriteUUID(a_Player.GetUUID());
+	Pkt.WriteString(a_Player.GetPlayerListName());
+
+	const Json::Value & Properties = a_Player.GetClientHandle()->GetProperties();
+	Pkt.WriteVarInt32(Properties.size());
+	for (auto & Node : Properties)
+	{
+		Pkt.WriteString(Node.get("name", "").asString());
+		Pkt.WriteString(Node.get("value", "").asString());
+		AString Signature = Node.get("signature", "").asString();
+		if (Signature.empty())
+		{
+			Pkt.WriteBool(false);
+		}
+		else
+		{
+			Pkt.WriteBool(true);
+			Pkt.WriteString(Signature);
+		}
+	}
+
+	Pkt.WriteVarInt32(static_cast<UInt32>(a_Player.GetEffectiveGameMode()));
+	Pkt.WriteVarInt32(static_cast<UInt32>(a_Player.GetClientHandle()->GetPing()));
+	Pkt.WriteBool(false);
+}
+*/
     fn player_abilities(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x39).unwrap(); // Player Abilities packet
-
 
         {
             let p = player.read().unwrap();

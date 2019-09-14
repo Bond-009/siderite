@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::Sender;
 
+use log::*;
 use uuid::Uuid;
 use serde_json as json;
 
@@ -50,6 +51,10 @@ impl Client {
 
     pub fn uuid(&self) -> Uuid {
         self.uuid
+    }
+
+    pub fn properties(&self) -> &json::Value {
+        &self.properties
     }
 
     pub fn get_username(&self) -> Option<&str> {
@@ -107,6 +112,10 @@ impl Client {
 
         prot.send(Packet::TimeUpdate(world.clone())).unwrap();
         prot.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
+        prot.send(
+            Packet::PlayerListAddPlayer(
+                self.server.get_client(self.id).unwrap(),
+                player.clone())).unwrap();
     }
 
     pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {
