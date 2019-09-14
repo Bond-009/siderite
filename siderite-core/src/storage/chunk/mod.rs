@@ -3,30 +3,27 @@ pub mod chunk_map;
 
 use std::io::{Result, Write};
 
-use num_traits::{FromPrimitive, Num};
+use num_traits::FromPrimitive;
 
+use crate::coord::{ChunkCoord, Coord};
 use crate::blocks::BlockType;
 
 use self::section::Section;
 
-pub const HEIGTH: i32 = WIDTH * SECTION_COUNT as i32;
+/// Width of a chunk
 pub const WIDTH: i32 = 16;
+
+/// Height of a chunk column
+pub const HEIGHT: i32 = WIDTH * SECTION_COUNT as i32;
+
+/// Area of a chunk
 pub const AREA: i32 = WIDTH * WIDTH;
+
+/// Number of sections in a chunk column
 pub const SECTION_COUNT: usize = 16;
+
+/// Number of blocks in one section
 pub const SECTION_BLOCK_COUNT: usize = (AREA * WIDTH) as usize;
-
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-pub struct ChunkCoord {
-    pub x: i32,
-    pub z: i32
-}
-
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-pub struct Coord<T: Num + PartialOrd + Copy> {
-    pub x: T,
-    pub y: T,
-    pub z: T
-}
 
 pub trait SerializeChunk {
     fn serialized_size(&self) -> usize;
@@ -46,6 +43,7 @@ impl ChunkColumn {
                 bit |= 1 << i;
             }
         }
+
         bit
     }
 
@@ -170,7 +168,7 @@ impl Chunk {
     // TODO: const
     #[inline]
     pub fn is_valid_height(y: i32) -> bool {
-        y >= 0 && y < HEIGTH
+        y >= 0 && y < HEIGHT
     }
 
     // TODO: const

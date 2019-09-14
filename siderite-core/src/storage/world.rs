@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use num_derive::FromPrimitive;
 
-use crate::entities::player::Player;
+use crate::coord::Coord;
+use crate::entities::player::{GameMode, Player};
 use crate::storage::chunk::chunk_map::ChunkMap;
 
 #[repr(i8)]
@@ -25,7 +26,8 @@ pub enum Difficulty {
 pub struct WorldConfig {
     pub name: String,
     pub dimension: Dimension,
-    pub difficulty: Difficulty
+    pub difficulty: Difficulty,
+    pub default_gamemode: GameMode
 }
 
 pub struct World {
@@ -34,7 +36,10 @@ pub struct World {
     difficulty: Difficulty,
 
     players: Vec<Player>,
-    chunk_map: Arc<ChunkMap>
+    chunk_map: Arc<ChunkMap>,
+
+    default_gm: GameMode,
+    spawn_pos: Coord<f64>
 }
 
 impl World {
@@ -45,23 +50,36 @@ impl World {
             difficulty: config.difficulty,
 
             players: Vec::new(),
-            chunk_map: Arc::new(ChunkMap::default())
+            chunk_map: Arc::new(ChunkMap::new()),
+
+            default_gm: config.default_gamemode,
+            spawn_pos: Coord::new(0.0, 0.0, 0.0)
         }
     }
 
-    pub fn get_dimension(&self) -> Dimension {
+    pub fn dimension(&self) -> Dimension {
         self.dimension
     }
 
-    pub fn get_difficulty(&self) -> Difficulty {
+    pub fn difficulty(&self) -> Difficulty {
         self.difficulty
     }
 
-    pub fn get_num_players(&self) -> usize {
+    pub fn num_players(&self) -> usize {
         self.players.len()
     }
 
-    pub fn get_chunk_map(&self) -> Arc<ChunkMap> {
+    pub fn chunk_map(&self) -> Arc<ChunkMap> {
         self.chunk_map.clone()
+    }
+
+    /// Returns the default gamemode for this world
+    pub fn default_gm(&self) -> GameMode {
+        self.default_gm
+    }
+
+    /// Returns the default spawn position for this world
+    pub fn spawn_pos(&self) -> Coord<f64> {
+        self.spawn_pos
     }
 }

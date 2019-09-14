@@ -2,6 +2,7 @@ use std::iter::Iterator;
 use std::sync::{Arc, mpsc};
 use std::thread;
 
+use log::info;
 use serde_json as json;
 use uuid::Uuid;
 
@@ -45,6 +46,7 @@ impl Authenticator {
 
         // TODO: check if UUID is compatible with vanilla
         let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
+        info!("UUID of player {} is {}", &info.username, uuid.to_hyphenated());
         self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
     }
 }

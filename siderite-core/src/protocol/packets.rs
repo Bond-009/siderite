@@ -1,10 +1,10 @@
 use std::sync::{Arc, RwLock};
 
+use crate::coord::ChunkCoord;
 use crate::entities::player::Player;
 use crate::protocol::GameStateReason;
-use crate::storage::world::{Difficulty, World};
-use crate::storage::chunk::ChunkCoord;
 use crate::storage::chunk::chunk_map::ChunkMap;
+use crate::storage::world::{Difficulty, World};
 
 pub enum Packet {
     // Login state

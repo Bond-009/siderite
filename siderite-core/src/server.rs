@@ -10,7 +10,7 @@ use serde_json as json;
 use uuid::Uuid;
 
 use crate::client::Client;
-use crate::entities::player::Player;
+use crate::entities::player::{GameMode, Player};
 use crate::protocol::Protocol;
 use crate::protocol::authenticator::Authenticator;
 use crate::protocol::thread::ProtocolThread;
@@ -48,20 +48,20 @@ pub struct Server {
     authenticate: bool,
 
     public_key_der: Vec<u8>,
-    private_key: Rsa<Private>
+    private_key: Rsa<Private>,
 }
 
 impl Server {
 
-    pub fn get_description(&self) -> &str {
+    pub fn description(&self) -> &str {
         &self.description
     }
 
-    pub fn get_max_players(&self) -> i32 {
+    pub fn max_players(&self) -> i32 {
         self.max_players
     }
 
-    pub fn get_favicon(&self) -> &str {
+    pub fn favicon(&self) -> &str {
         &self.favicon
     }
 
@@ -69,15 +69,15 @@ impl Server {
         self.authenticate
     }
 
-    pub fn get_private_key(&self) -> &Rsa<Private> {
+    pub fn private_key(&self) -> &Rsa<Private> {
         &self.private_key
     }
 
-    pub fn get_id(&self) -> &str {
+    pub fn id(&self) -> &str {
         &self.id
     }
 
-    pub fn get_public_key_der(&self) -> &[u8] {
+    pub fn public_key_der(&self) -> &[u8] {
         &self.public_key_der
     }
 
@@ -105,16 +105,16 @@ impl Server {
     }
 
     pub fn start(svr: Arc<Server>) {
+        info!("Starting siderite on *:{}", svr.port);
+
         let ps = ProtocolThread::start();
         let auth = Authenticator::start(svr.clone());
 
         let listener = TcpListener::bind(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), svr.port)
             ).unwrap();
-        info!("Started server");
 
         for connection in listener.incoming() {
-            info!("Incomming connection!");
             let mut stream = connection.unwrap();
             if Protocol::legacy_ping(&mut stream) {
                 return;
@@ -136,15 +136,13 @@ impl Server {
         self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
             name: "Default".to_owned(),
             dimension: Dimension::Overworld,
-            difficulty: Difficulty::Normal
+            difficulty: Difficulty::Normal,
+            default_gamemode: GameMode::Creative
         }))));
     }
 
-    pub fn try_load_player(&self, client: Arc<RwLock<Client>>) -> Arc<RwLock<Player>>{
-        // TODO: Try load player
-
-        let world = self.worlds[0].clone();
-        Arc::new(RwLock::new(Player::new(client, world)))
+    pub fn default_world(&self) -> Arc<RwLock<World>> {
+        self.worlds[0].clone()
     }
 
     pub fn do_with_client(&self, client_id: u32, function: &dyn Fn(&Arc<RwLock<Client>>) -> bool) -> bool {
@@ -170,7 +168,7 @@ impl Server {
     pub fn online_players(&self) -> i32 {
         let mut players = 0usize;
         for world in &self.worlds {
-            players += world.read().unwrap().get_num_players();
+            players += world.read().unwrap().num_players();
         }
 
         players as i32
@@ -182,14 +180,17 @@ impl Server {
             return;
         }
 
-        info!("Authenticated user {}", username);
-
         let client_arc = self.get_client(client_id).unwrap();
-        let client_arc_clone = client_arc.clone();
+        let client_arc2 = client_arc.clone();
         let mut client = client_arc.write().unwrap();
         client.auth(username, uuid, properties);
-        let player = self.try_load_player(client_arc_clone);
-        client.finish_auth(player);
+        let world = self.default_world();
+        let (gm, spawn) = {
+            let w = world.read().unwrap();
+            (w.default_gm(), w.spawn_pos())
+        };
+        let player = Player::new(client_arc2, world, gm, spawn);
+        client.finish_auth(Arc::new(RwLock::new(player)));
     }
 
     pub fn kick_user(&self, client_id: u32, reason: &str) {

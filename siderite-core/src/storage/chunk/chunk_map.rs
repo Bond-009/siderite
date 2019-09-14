@@ -4,6 +4,7 @@ use std::sync::RwLock;
 use crate::storage::chunk::*;
 use crate::storage::chunk::section::Section;
 
+#[derive(Default)]
 pub struct ChunkMap {
     // REVIEW: currently we box up the chunks because
     // without they overflow the stack when inserting to the hashmap in debug mode
@@ -11,13 +12,13 @@ pub struct ChunkMap {
 }
 
 impl ChunkMap {
-    pub fn default() -> ChunkMap {
+    pub fn new() -> ChunkMap {
         ChunkMap {
             chunks: RwLock::new(HashMap::new())
         }
     }
 
-    pub fn do_with_chunk(&self, coord: ChunkCoord, function: &mut dyn FnMut(&Chunk)) {
+    pub fn do_with_chunk(&self, coord: ChunkCoord, function: impl FnOnce(&Chunk)) {
         let chunks = self.chunks.read().unwrap();
 
         if let Some(chunk) = chunks.get(&coord) {
@@ -25,7 +26,7 @@ impl ChunkMap {
         }
     }
 
-    pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: &mut dyn FnMut(&mut Chunk)) {
+    pub fn do_with_chunk_mut(&self, coord: ChunkCoord, function: impl FnOnce(&mut Chunk)) {
         let mut chunks = self.chunks.write().unwrap();
 
         if let Some(chunk) = chunks.get_mut(&coord) {

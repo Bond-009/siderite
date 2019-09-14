@@ -24,16 +24,15 @@ use openssl::symm::{Cipher, Crypter, Mode};
 
 use rand::{thread_rng, Rng};
 use serde_json::json;
-use uuid::adapter::Hyphenated;
 
-use crate::var_int_size;
 use crate::blocks::BlockFace;
+use crate::coord::{ChunkCoord, Coord};
 use crate::client::Client;
-use crate::entities::player::{GameMode, Player};
+use crate::entities::player::Player;
 use crate::server;
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
-use crate::storage::chunk::{Chunk, ChunkCoord, Coord, SerializeChunk};
+use crate::storage::chunk::{Chunk, SerializeChunk};
 use crate::storage::chunk::chunk_map::ChunkMap;
 
 use self::authenticator::AuthInfo;
@@ -135,7 +134,7 @@ impl Protocol {
         Protocol {
             server: server.clone(),
             client_id,
-            client: Arc::new(RwLock::new(Client::new(client_id, server, tx))), // TODO: proper client id
+            client: Arc::new(RwLock::new(Client::new(client_id, server, tx))),
             receiver: rx,
             authenticator,
 
@@ -414,7 +413,7 @@ impl Protocol {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
-                    buf.write_var_int(var_int_size(length) + comp_buf.len() as i32)?;
+                    buf.write_var_int(mcrw::var_int_size(length) + comp_buf.len() as i32)?;
                     buf.write_var_int(length)?;
                     buf.write_all(&comp_buf)?;
                 } else {
@@ -435,7 +434,7 @@ impl Protocol {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
-                    self.stream.write_var_int(var_int_size(length) + comp_buf.len() as i32)?;
+                    self.stream.write_var_int(mcrw::var_int_size(length) + comp_buf.len() as i32)?;
                     self.stream.write_var_int(length)?;
                     self.stream.write_all(&comp_buf)?;
                 } else {
@@ -474,7 +473,7 @@ impl Protocol {
                 "protocol": 47
             },
             "players": {
-                "max": self.server.get_max_players(),
+                "max": self.server.max_players(),
                 "online": self.server.online_players(),
                 "sample": [
                     {
@@ -484,10 +483,10 @@ impl Protocol {
                 ]
             },
             "description": {
-                "text": self.server.get_description(),
+                "text": self.server.description(),
             },
         });
-        let favicon = self.server.get_favicon();
+        let favicon = self.server.favicon();
         if !favicon.is_empty()
         {
             response.as_object_mut().unwrap().insert(
@@ -524,7 +523,7 @@ impl Protocol {
         }
         else {
             self.authenticator.send(AuthInfo {
-                client_id: self.client.read().unwrap().get_id(),
+                client_id: self.client.read().unwrap().id(),
                 username,
                 server_id: None
             }).unwrap();
@@ -535,12 +534,12 @@ impl Protocol {
         let ss_len = rbuf.read_var_int().unwrap() as usize; // Shared Secret Key Length
         let mut ssarr = vec![0u8; ss_len];
         rbuf.read_exact(&mut ssarr).unwrap(); // Shared Secret
-        
+
         let vt_len = rbuf.read_var_int().unwrap() as usize; // Verify Token Length
         let mut vtarr = vec![0u8; vt_len];
         rbuf.read_exact(&mut vtarr).unwrap(); // Verify Token
 
-        let private_key = self.server.get_private_key();
+        let private_key = self.server.private_key();
 
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
@@ -568,21 +567,29 @@ impl Protocol {
 
         self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
 
-        let encrypter = Crypter::new(*CIPHER, Mode::Encrypt, &self.encryption_key, Some(&self.encryption_key)).unwrap();
-        let decrypter = Crypter::new(*CIPHER, Mode::Decrypt, &self.encryption_key, Some(&self.encryption_key)).unwrap();
+        let encrypter = Crypter::new(
+            *CIPHER,
+            Mode::Encrypt,
+            &self.encryption_key,
+            Some(&self.encryption_key)).unwrap();
+        let decrypter = Crypter::new(
+            *CIPHER,
+            Mode::Decrypt,
+            &self.encryption_key,
+            Some(&self.encryption_key)).unwrap();
         self.crypter = Some((encrypter, decrypter));
 
         let mut hasher = sha::Sha1::new();
-        hasher.update(self.server.get_id().as_bytes());
+        hasher.update(self.server.id().as_bytes());
         hasher.update(&self.encryption_key);
-        hasher.update(&self.server.get_public_key_der());
+        hasher.update(&self.server.public_key_der());
         let hash = hasher.finish();
         let server_id = authenticator::java_hex_digest(hash);
 
         let client = self.client.read().unwrap();
 
         self.authenticator.send(AuthInfo {
-                client_id: client.get_id(),
+                client_id: client.id(),
                 username: client.get_username().unwrap().to_owned(),
                 server_id: Some(server_id)
             }).unwrap();
@@ -593,9 +600,9 @@ impl Protocol {
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Encryption Request packet
-        wbuf.write_string(&self.server.get_id()).unwrap();
+        wbuf.write_string(&self.server.id()).unwrap();
         // Public Key
-        let public_key_der = self.server.get_public_key_der();
+        let public_key_der = self.server.public_key_der();
         wbuf.write_var_int(public_key_der.len() as i32).unwrap();
         wbuf.write_all(public_key_der).unwrap();
         // Verify Token
@@ -620,13 +627,12 @@ impl Protocol {
         {
             let client = self.client.read().unwrap();
 
-            let uuid = client.get_uuid().unwrap();
-            let uuid_str: String = Hyphenated::from_uuid(uuid).to_string();
+            let uuid = client.uuid().to_hyphenated().to_string();
             let username = client.get_username().unwrap();
-            debug!("uuid: {}", uuid_str);
+            debug!("uuid: {}", uuid);
             debug!("name: {}", username);
 
-            wbuf.write_string(&uuid_str).unwrap();
+            wbuf.write_string(&uuid).unwrap();
             wbuf.write_string(&username).unwrap();
         }
 
@@ -777,8 +783,8 @@ impl Protocol {
         let _entity_id = rbuf.read_var_int().unwrap(); // Entity ID
         let _action_id = rbuf.read_var_int().unwrap(); // Action ID
         // Only used by Horse Jump Boost, in which case it ranges from 0 to 100. In all other cases it is 0.
-        let _action_par = rbuf.read_var_int().unwrap(); // Action Parameter 
-        
+        let _action_par = rbuf.read_var_int().unwrap(); // Action Parameter
+
         // ID | Action
         // --------------------------------
         // 0  | Start sneaking
@@ -811,7 +817,7 @@ impl Protocol {
     /// The latter 2 values are used to indicate the walking and flying speeds respectively,
     /// while the first byte is used to determine the value of 4 booleans.
     /// The vanilla client sends this packet when the player starts/stops flying
-    /// with the Flags parameter changed accordingly. All other parameters are ignored by the vanilla server. 
+    /// with the Flags parameter changed accordingly. All other parameters are ignored by the vanilla server.
     fn handle_player_abilities(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
 
@@ -870,7 +876,7 @@ impl Protocol {
         match action_id {
             0 => (), // TODO: respawn
             1 => (), // TODO: Stats
-            2 => (), // TODO // Taking Inventory achievement 
+            2 => (), // TODO // Taking Inventory achievement
             _ => {
                 error!("Action ID is out of range (0..2), got {}", action_id);
                 self.disconnect("Hacked client").unwrap();
@@ -916,14 +922,14 @@ impl Protocol {
         wbuf.write_int(0).unwrap(); // The player's Entity ID
         {
             let p = player.read().unwrap();
-            wbuf.write_ubyte(p.get_gamemode() as u8).unwrap(); // Gamemode
+            wbuf.write_ubyte(p.gm() as u8).unwrap(); // Gamemode
         }
         {
             let w = world.read().unwrap();
-            wbuf.write_byte(w.get_dimension() as i8).unwrap(); // Dimension
-            wbuf.write_ubyte(w.get_difficulty() as u8).unwrap(); // Difficulty
+            wbuf.write_byte(w.dimension() as i8).unwrap(); // Dimension
+            wbuf.write_ubyte(w.difficulty() as u8).unwrap(); // Difficulty
         }
-        let max_players = self.server.get_max_players();
+        let max_players = self.server.max_players();
 
         wbuf.write_ubyte(max_players as u8).unwrap(); // Max players
         wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
@@ -990,10 +996,10 @@ impl Protocol {
         wbuf.write_int(coord.z).unwrap(); // Chunk Z
 
         // This is true if the packet represents all sections in this vertical column,
-        // where the Primary Bit Mask specifies exactly which sections are included, and which are air 
+        // where the Primary Bit Mask specifies exactly which sections are included, and which are air
         wbuf.write_bool(true).unwrap(); // Ground-Up Continuous
 
-        chunk_map.do_with_chunk(coord, &mut |chunk: &Chunk| {
+        chunk_map.do_with_chunk(coord, |chunk: &Chunk| {
             let bit_mask = chunk.data.get_primary_bit_mask();
             wbuf.write_ushort(bit_mask).unwrap(); // Primary Bit Mask
 
@@ -1022,24 +1028,10 @@ impl Protocol {
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x39).unwrap(); // Player Abilities packet
 
-        // Field         | Bit
-        // --------------|-----
-        // Invulnerable  | 0x01
-        // Flying        | 0x02
-        // Allow Flying  | 0x04
-        // Creative Mode | 0x08
+
         {
             let p = player.read().unwrap();
-            let mut flags: i8 = 0;
-            if p.get_gamemode() == GameMode::Creative {
-                flags |= 0x08; // Creative Mode
-            }
-            // TODO: use actual values
-            flags |= 0x01; // Invulnerable
-            flags |= 0x02; // Flying
-            flags |= 0x04; // Allow Flying
-
-            wbuf.write_byte(flags).unwrap();
+            wbuf.write_ubyte(p.abilities().bits()).unwrap();
         }
 
         wbuf.write_float(0.05 * 1.0).unwrap(); // Flying Speed
@@ -1085,14 +1077,14 @@ impl Protocol {
                 State::Play => 0x40,
                 _ => panic!("Unknown state for Disconnect Packet: {:?}", self.state)
             }
-        ).unwrap(); // Disconnect packet
+        )?; // Disconnect packet
 
         info!("Kicking with reason: '{}'", reason);
 
         let reason = json!({
             "text": reason
         });
-        wbuf.write_string(&reason.to_string()).unwrap();
+        wbuf.write_string(&reason.to_string())?;
         self.write_packet(&wbuf)?;
         self.shutdown()
     }
@@ -1103,8 +1095,7 @@ impl Protocol {
         Ok(())
     }
 
-    fn is_disconnection_error(e: ErrorKind) -> bool
-    {
+    fn is_disconnection_error(e: ErrorKind) -> bool {
         e == ErrorKind::NotConnected
             || e == ErrorKind::ConnectionAborted
             || e == ErrorKind::ConnectionRefused

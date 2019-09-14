@@ -9,16 +9,16 @@ use crate::entities::player::Player;
 use crate::protocol::DigStatus;
 use crate::protocol::packets::Packet;
 use crate::server::Server;
-use crate::storage::chunk::{ChunkCoord, Coord};
+use crate::coord::{ChunkCoord, Coord};
 use crate::storage::world::Difficulty;
 
 pub struct Client {
     id: u32,
     username: Option<String>,
-    uuid: Option<Uuid>,
+    uuid: Uuid,
     properties: json::Value,
 
-    _player: Option<Arc<RwLock<Player>>>,
+    player: Option<Arc<RwLock<Player>>>,
 
     server: Arc<Server>,
     protocol: Mutex<Sender<Packet>>,
@@ -30,25 +30,25 @@ impl Client {
          Client {
             id,
             username: None,
-            uuid: None,
+            uuid: Uuid::nil(),
             properties: json::Value::Null,
 
-            _player: None,
+            player: None,
 
             server,
             protocol: Mutex::new(protocol),
         }
     }
 
-    pub fn get_server(&self) -> Arc<Server> {
+    pub fn server(&self) -> Arc<Server> {
         self.server.clone()
     }
 
-    pub fn get_id(&self) -> u32 {
+    pub fn id(&self) -> u32 {
         self.id
     }
 
-    pub fn get_uuid(&self) -> Option<Uuid> {
+    pub fn uuid(&self) -> Uuid {
         self.uuid
     }
 
@@ -71,8 +71,8 @@ impl Client {
     pub fn auth(&mut self, username: String, uuid: Uuid, properties: json::Value) {
         self.username = Some(username);
 
-        if self.uuid == None {
-            self.uuid = Some(uuid);
+        if self.uuid.is_nil() {
+            self.uuid = uuid;
         }
 
         if self.properties == json::Value::Null {
@@ -82,10 +82,11 @@ impl Client {
         self.protocol.lock().unwrap().send(Packet::LoginSuccess()).unwrap();
     }
 
-    pub fn finish_auth(&self, player: Arc<RwLock<Player>>) {
-        let world = player.read().unwrap().get_world();
+    pub fn finish_auth(&mut self, player: Arc<RwLock<Player>>) {
+        self.player = Some(player.clone());
+        let world = player.read().unwrap().world();
         let prot = self.protocol.lock().unwrap();
-        let chunk_map = world.read().unwrap().get_chunk_map();
+        let chunk_map = world.read().unwrap().chunk_map();
 
         prot.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
         prot.send(Packet::SpawnPosition(world.clone())).unwrap();
