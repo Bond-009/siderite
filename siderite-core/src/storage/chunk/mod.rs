@@ -159,21 +159,18 @@ impl Chunk {
         }
     }
 
-    // TODO: const
     #[inline]
-    pub fn is_valid_width(x: i32) -> bool {
+    pub const fn is_valid_width(x: i32) -> bool {
         x >= 0 && x < WIDTH
     }
 
-    // TODO: const
     #[inline]
-    pub fn is_valid_height(y: i32) -> bool {
+    pub const fn is_valid_height(y: i32) -> bool {
         y >= 0 && y < HEIGHT
     }
 
-    // TODO: const
     #[inline]
-    pub fn is_valid_rel_pos(rel_pos: Coord<i32>) -> bool {
+    pub const fn is_valid_rel_pos(rel_pos: Coord<i32>) -> bool {
         Chunk::is_valid_width(rel_pos.x)
             && Chunk::is_valid_height(rel_pos.y)
             && Chunk::is_valid_width(rel_pos.z)

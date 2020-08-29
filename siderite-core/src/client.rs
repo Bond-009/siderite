@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::Sender;
 
-use log::*;
 use uuid::Uuid;
 use serde_json as json;
 
