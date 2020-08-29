@@ -10,8 +10,8 @@ edition = "2018"
 lto = true
 
 [dependencies]
-base64 = "^0.10"
-env_logger = "^0.6"
+base64 = "^0.12"
+env_logger = "^0.7"
 log = "^0.4"
 
 [dependencies.siderite-core]
