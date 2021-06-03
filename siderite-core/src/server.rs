@@ -9,10 +9,10 @@ use openssl::rsa::Rsa;
 use serde_json as json;
 use uuid::Uuid;
 
+use crate::auth::*;
 use crate::client::Client;
 use crate::entities::player::{GameMode, Player};
 use crate::protocol::Protocol;
-use crate::protocol::authenticator::Authenticator;
 use crate::protocol::thread::ProtocolThread;
 use crate::storage::world::*;
 
@@ -26,9 +26,8 @@ pub struct ServerConfig {
     pub port: u16,
     pub description: String,
     pub max_players: i32,
+    pub encryption: bool,
     pub favicon: String,
-
-    pub authentication: bool
 }
 
 pub struct Server {
@@ -44,8 +43,9 @@ pub struct Server {
     favicon: String,
 
     port: u16,
+    encryption: bool,
 
-    authenticate: bool,
+    pub authenticator: crossbeam_channel::Sender<AuthInfo>,
 
     public_key_der: Vec<u8>,
     private_key: Rsa<Private>,
@@ -65,8 +65,8 @@ impl Server {
         &self.favicon
     }
 
-    pub fn should_authenticate(&self) -> bool {
-        self.authenticate
+    pub fn encryption(&self) -> bool {
+        self.encryption
     }
 
     pub fn private_key(&self) -> &Rsa<Private> {
@@ -81,7 +81,7 @@ impl Server {
         &self.public_key_der
     }
 
-    pub fn new(config: ServerConfig) -> Server {
+    pub fn new(config: ServerConfig, authenticator: crossbeam_channel::Sender<AuthInfo>) -> Server {
         let rsa = Rsa::generate(1024).unwrap();
         Server {
             // MC Update (1.7.x): The server ID is now sent as an empty string.
@@ -93,11 +93,12 @@ impl Server {
 
             description: config.description,
             max_players: config.max_players,
+            encryption: config.encryption,
             favicon: config.favicon,
 
             port: config.port,
 
-            authenticate: config.authentication,
+            authenticator,
 
             public_key_der: rsa.public_key_to_der().unwrap(),
             private_key: rsa
@@ -108,7 +109,6 @@ impl Server {
         info!("Starting siderite on *:{}", svr.port);
 
         let ps = ProtocolThread::start();
-        let auth = Authenticator::start(svr.clone());
 
         let listener = TcpListener::bind(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), svr.port)
@@ -121,8 +121,9 @@ impl Server {
             }
 
             stream.set_nonblocking(true).expect("set_nonblocking call failed");
+            stream.set_nodelay(true).expect("set_nodeley call failed");
 
-            let prot = Protocol::new(svr.clone(), stream, auth.clone());
+            let prot = Protocol::new(svr.clone(), stream);
             let (client_id, client) = prot.get_client();
             ps.send(prot).unwrap();
 

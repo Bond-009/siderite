@@ -4,6 +4,7 @@ use std::sync::mpsc::Sender;
 use uuid::Uuid;
 use serde_json as json;
 
+use crate::auth::AuthInfo;
 use crate::blocks::BlockFace;
 use crate::entities::player::Player;
 use crate::protocol::DigStatus;
@@ -70,6 +71,14 @@ impl Client {
     pub fn kick(&self, reason: &str) {
         let packet = Packet::Disconnect(reason.to_owned());
         self.protocol.lock().unwrap().send(packet).unwrap();
+    }
+
+    pub fn handle_login(&self, server_id: Option<String>) {
+        self.server.authenticator.send(AuthInfo {
+            client_id: self.id,
+            server_id,
+            username: self.username.as_ref().expect("expected username").to_owned()
+        }).unwrap();
     }
 
     pub fn auth(&mut self, username: String, uuid: Uuid, properties: json::Value) {

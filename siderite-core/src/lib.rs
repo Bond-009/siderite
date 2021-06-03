@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod blocks;
 pub mod coord;
 pub mod entities;

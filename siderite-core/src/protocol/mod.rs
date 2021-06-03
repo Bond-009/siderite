@@ -1,12 +1,11 @@
-pub mod authenticator;
 pub mod packets;
 pub mod thread;
-pub mod v47;
+mod v47;
 
 use std::io::{ErrorKind, Read, Write, Result};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock, mpsc};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
 
 use circbuf::CircBuf;
@@ -25,6 +24,7 @@ use openssl::symm::{Cipher, Crypter, Mode};
 use rand::{thread_rng, Rng};
 use serde_json::json;
 
+use crate::auth;
 use crate::blocks::BlockFace;
 use crate::coord::{ChunkCoord, Coord};
 use crate::client::Client;
@@ -35,7 +35,6 @@ use crate::storage::world::{Difficulty, World};
 use crate::storage::chunk::{Chunk, SerializeChunk};
 use crate::storage::chunk::chunk_map::ChunkMap;
 
-use self::authenticator::AuthInfo;
 use self::packets::Packet;
 
 /// Maximum size of a packet before its compressed
@@ -108,7 +107,6 @@ pub struct Protocol {
     server: Arc<Server>,
     client_id: u32,
     client: Arc<RwLock<Client>>,
-    authenticator: Sender<AuthInfo>,
     receiver: Receiver<Packet>,
 
     stream: TcpStream,
@@ -125,7 +123,7 @@ pub struct Protocol {
 
 impl Protocol {
 
-    pub fn new(server: Arc<Server>, stream: TcpStream, authenticator: Sender<AuthInfo>) -> Protocol {
+    pub fn new(server: Arc<Server>, stream: TcpStream) -> Protocol {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
         thread_rng().fill(&mut arr[..]);
         let (tx, rx) = mpsc::channel();
@@ -136,7 +134,6 @@ impl Protocol {
             client_id,
             client: Arc::new(RwLock::new(Client::new(client_id, server, tx))),
             receiver: rx,
-            authenticator,
 
             stream,
             state: State::HandShaking,
@@ -516,18 +513,13 @@ impl Protocol {
 
     fn handle_login_start(&mut self, mut rbuf: &[u8]) {
         let username = rbuf.read_string().unwrap();
+        self.client.write().unwrap().set_username(username);
 
-        if self.server.should_authenticate() {
+        if self.server.encryption() {
             self.encryption_request();
-
-            self.client.write().unwrap().set_username(username);
         }
         else {
-            self.authenticator.send(AuthInfo {
-                client_id: self.client.read().unwrap().id(),
-                username,
-                server_id: None
-            }).unwrap();
+            self.client.write().unwrap().handle_login(None);
         }
     }
 
@@ -585,15 +577,8 @@ impl Protocol {
         hasher.update(&self.encryption_key);
         hasher.update(&self.server.public_key_der());
         let hash = hasher.finish();
-        let server_id = authenticator::java_hex_digest(hash);
-
-        let client = self.client.read().unwrap();
-
-        self.authenticator.send(AuthInfo {
-                client_id: client.id(),
-                username: client.get_username().unwrap().to_owned(),
-                server_id: Some(server_id)
-            }).unwrap();
+        let server_id = auth::java_hex_digest(hash);
+        self.client.read().unwrap().handle_login(Some(server_id));
     }
 
     fn encryption_request(&mut self) {

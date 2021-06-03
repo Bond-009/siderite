@@ -1,0 +1,24 @@
+[package]
+name = "siderite"
+version = "0.0.1"
+authors = ["Bond-009 <bond.009@outlook.com>"]
+keywords = ["siderite", "minecraft", "server"]
+repository = "https://github.com/Bond-009/siderite.git"
+edition = "2018"
+
+[features]
+default = ["mojang_auth"]
+mojang_auth = ["siderite-mojang"]
+
+[dependencies]
+base64 = "^0.13"
+crossbeam-channel = "^0.5"
+env_logger = "^0.8"
+log = "^0.4"
+
+[dependencies.siderite-core]
+path = "../siderite-core"
+
+[dependencies.siderite-mojang]
+path = "../siderite-mojang"
+optional = true

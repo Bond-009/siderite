@@ -1,63 +1,57 @@
 use std::iter::Iterator;
-use std::sync::{Arc, mpsc};
-use std::thread;
+use std::result;
 
+use json::Value;
 use log::info;
 use serde_json as json;
 use uuid::Uuid;
 
-use crate::server::Server;
+pub type Result = result::Result<AuthResponse, Error>;
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Error {
+    NoServerId,
+    Failed
+}
+
+pub struct AuthResponse {
+    pub client_id: u32,
+    pub username: String,
+    pub uuid: Uuid,
+    pub properties: Value
+}
 
 pub struct AuthInfo {
     pub client_id: u32,
-    pub username: String,
-    pub server_id: Option<String>
+    pub server_id: Option<String>,
+    pub username: String
 }
 
-pub struct Authenticator {
-    server: Arc<Server>
+pub trait Authenticator {
+    fn authenticate(&self, info: AuthInfo) -> Result;
 }
 
-impl Authenticator {
-    pub fn start(server: Arc<Server>) -> mpsc::Sender<AuthInfo> {
-        let (tx, rx) = mpsc::channel();
+pub struct DefaultAuthenticator;
 
-        thread::spawn(move || {
-            let authenticator = Authenticator {
-                server
-            };
-
-            for received in rx.iter() {
-                authenticator.handle_request(received);
-            }
-        });
-
-        tx
-    }
-
-    fn handle_request(&self, info: AuthInfo) {
-        // TODO: warn if auth is enabled in the config but not at compile time?
-
-        #[cfg(feature = "authentication")]
-        if self.server.should_authenticate() {
-            let res = mojang::auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
-            let uuid = Uuid::parse_str(&res.id).unwrap();
-
-            self.server.auth_user(info.client_id, res.name, uuid, res.properties);
-            return;
-        }
-
+impl Authenticator for DefaultAuthenticator {
+    fn authenticate(&self, info: AuthInfo) -> Result {
         // TODO: check if UUID is compatible with vanilla
         let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
         info!("UUID of player {} is {}", &info.username, uuid.to_hyphenated());
-        self.server.auth_user(info.client_id, info.username, uuid, json::Value::Null);
+        Ok(AuthResponse {
+            client_id: info.client_id,
+            username: info.username,
+            uuid,
+            properties: json::Value::Null
+        })
     }
 }
 
 // TODO: move
 pub fn java_hex_digest(mut input: [u8; 20]) -> String {
-    const CHARS: &[u8; 16] = b"0123456789abcdef";
-    let hex = |byte: u8| { CHARS[byte as usize] };
+    const fn hex(byte: u8) -> u8 {
+        b"0123456789abcdef"[byte as usize]
+    }
 
     // The max size is 2 * the length of the input array + 1 for the possible '-' sign
     let mut s = Vec::with_capacity(20 * 2 + 1);
@@ -75,16 +69,16 @@ pub fn java_hex_digest(mut input: [u8; 20]) -> String {
         }
 
         if *b >= 16 {
-            s.push(hex(b>>4));
+            s.push(hex(b >> 4));
         }
 
-        s.push(hex(b&0x0f));
+        s.push(hex(b & 0x0f));
         break;
     }
 
     for b in iter {
-        s.push(hex(b>>4));
-        s.push(hex(b&0x0f));
+        s.push(hex(b >> 4));
+        s.push(hex(b & 0x0f));
     }
 
     // Whe know the string is valid UTF-8
