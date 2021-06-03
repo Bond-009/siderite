@@ -1036,18 +1036,23 @@ impl Protocol {
             let client = client.read().unwrap();
             wbuf.write_all(client.uuid().as_bytes()).unwrap(); // UUID
             wbuf.write_string(client.get_username().unwrap()).unwrap();
-            let properties = client.properties().as_array().unwrap();
-            wbuf.write_var_int(properties.len() as i32).unwrap();
-            for prop in properties {
-                wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
-                wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
-                match prop.get("signature") {
-                    Some(v) => {
+            if let Some(properties) = client.properties().as_array()
+            {
+                wbuf.write_var_int(properties.len() as i32).unwrap();
+                for prop in properties {
+                    wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
+                    wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
+                    if let Some(s) = prop.get("signature") {
                         wbuf.write_bool(true).unwrap();
-                        wbuf.write_string(v.as_str().unwrap()).unwrap();
-                    },
-                    None => wbuf.write_bool(false).unwrap()
+                        wbuf.write_string(s.as_str().unwrap()).unwrap();
+                    }
+                    else {
+                        wbuf.write_bool(false).unwrap()
+                    }
                 }
+            }
+            else {
+                wbuf.write_var_int(0).unwrap();
             }
         }
         {
