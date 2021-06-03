@@ -6,6 +6,10 @@ keywords = ["siderite", "minecraft", "server"]
 repository = "https://github.com/Bond-009/siderite.git"
 edition = "2018"
 
+[features]
+default = ["authentication"]
+authentication = [ "mojang" ]
+
 [dependencies]
 bitflags = "^1.2"
 circbuf = "0.2.0"
@@ -28,3 +32,4 @@ git = "https://gitlab.com/siderite/mcrw.git"
 
 [dependencies.mojang]
 git = "https://gitlab.com/siderite/mojang-rs.git"
+optional = true

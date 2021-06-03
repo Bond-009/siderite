@@ -36,6 +36,9 @@ impl Authenticator {
     }
 
     fn handle_request(&self, info: AuthInfo) {
+        // TODO: warn if auth is enabled in the config but not at compile time?
+
+        #[cfg(feature = "authentication")]
         if self.server.should_authenticate() {
             let res = mojang::auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
             let uuid = Uuid::parse_str(&res.id).unwrap();
