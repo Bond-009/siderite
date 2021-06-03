@@ -1,5 +1,6 @@
 use super::*;
 
+#[repr(align(32))]
 pub struct Section {
     pub block_types: [u8; SECTION_BLOCK_COUNT],
     pub block_metas: [u8; SECTION_BLOCK_COUNT / 2],
