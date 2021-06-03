@@ -3,6 +3,7 @@
 members = [
     "siderite",
     "siderite-core",
+    "siderite-mojang"
 ]
 
 [profile.release]
