@@ -39,19 +39,28 @@ macro_rules! create_test_data {
 fn bench_write_block_info(b: &mut Bencher) {
     let data = create_test_data!();
     let mut buf = Vec::with_capacity(SECTION_BLOCK_COUNT * 2);
-    b.iter(|| v47::write_block_info(black_box(&data), black_box(&mut buf)));
+    b.iter(|| {
+        v47::write_block_info(black_box(&data), black_box(&mut buf)).unwrap();
+        buf.clear();
+    });
 }
 
 #[bench]
 fn bench_write_block_info_fallback(b: &mut Bencher) {
     let data = create_test_data!();
     let mut buf = Vec::with_capacity(SECTION_BLOCK_COUNT * 2);
-    b.iter(|| v47::write_block_info_fallback(black_box(&data), black_box(&mut buf)));
+    b.iter(|| {
+        v47::write_block_info_fallback(black_box(&data), black_box(&mut buf)).unwrap();
+        buf.clear();
+    });
 }
 
 #[bench]
 fn bench_write_block_info_avx2(b: &mut Bencher) {
     let data = create_test_data!();
     let mut buf = Vec::with_capacity(SECTION_BLOCK_COUNT * 2);
-    b.iter(|| unsafe { v47::write_block_info_avx2(black_box(&data), black_box(&mut buf)) } );
+    b.iter(|| {
+        unsafe { v47::write_block_info_avx2(&data, &mut buf).unwrap(); };
+        buf.clear();
+    });
 }
