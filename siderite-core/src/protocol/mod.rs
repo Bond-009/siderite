@@ -1,6 +1,6 @@
 pub mod packets;
 pub mod thread;
-mod v47;
+pub mod v47;
 
 use std::io::{ErrorKind, Read, Write, Result};
 use std::net::{Shutdown, TcpStream};

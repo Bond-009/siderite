@@ -5,8 +5,9 @@ pub mod entities;
 pub mod server;
 pub mod storage;
 
+pub mod protocol;
+
 mod client;
-mod protocol;
 
 use std::time::Duration;
 

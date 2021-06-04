@@ -1,4 +1,4 @@
-use super::*;
+pub use super::SECTION_BLOCK_COUNT;
 
 #[repr(align(32))]
 pub struct Section {
