@@ -18,7 +18,7 @@ use mcrw::{MCReadExt, MCWriteExt};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
-use openssl::sha;
+use openssl::sha::Sha1;
 use openssl::symm::{Cipher, Crypter, Mode};
 
 use rand::{thread_rng, Rng};
@@ -572,7 +572,7 @@ impl Protocol {
             Some(&self.encryption_key)).unwrap();
         self.crypter = Some((encrypter, decrypter));
 
-        let mut hasher = sha::Sha1::new();
+        let mut hasher = Sha1::new();
         hasher.update(self.server.id().as_bytes());
         hasher.update(&self.encryption_key);
         hasher.update(&self.server.public_key_der());

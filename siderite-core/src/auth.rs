@@ -1,8 +1,10 @@
 use std::iter::Iterator;
 use std::result;
 
+use async_trait::async_trait;
 use json::Value;
-use log::info;
+use openssl::error::ErrorStack;
+use openssl::hash::{Hasher, MessageDigest};
 use serde_json as json;
 use uuid::Uuid;
 
@@ -27,17 +29,17 @@ pub struct AuthInfo {
     pub username: String
 }
 
-pub trait Authenticator {
-    fn authenticate(&self, info: AuthInfo) -> Result;
+#[async_trait]
+pub trait Authenticator : Send + Sync {
+    async fn authenticate(&self, info: AuthInfo) -> Result;
 }
 
-pub struct DefaultAuthenticator;
+pub struct OfflineAuthenticator;
 
-impl Authenticator for DefaultAuthenticator {
-    fn authenticate(&self, info: AuthInfo) -> Result {
-        // TODO: check if UUID is compatible with vanilla
-        let uuid = Uuid::new_v3(&Uuid::NAMESPACE_X500, info.username.as_bytes());
-        info!("UUID of player {} is {}", &info.username, uuid.to_hyphenated());
+#[async_trait]
+impl Authenticator for OfflineAuthenticator {
+    async fn authenticate(&self, info: AuthInfo) -> Result {
+        let uuid = generate_offline_uuid(&info.username).map_err(|_| Error::Failed)?;
         Ok(AuthResponse {
             client_id: info.client_id,
             username: info.username,
@@ -47,7 +49,36 @@ impl Authenticator for DefaultAuthenticator {
     }
 }
 
+///```
+/// use uuid::Uuid;
+/// use siderite_core::auth;
+///
+/// let uuid = auth::generate_offline_uuid("Bond_009").unwrap();
+/// assert_eq!(uuid, Uuid::parse_str("299ced23-a208-3ef3-99e3-206968219434").unwrap());
+///```
+pub fn generate_offline_uuid(username: &str) -> result::Result<Uuid, ErrorStack> {
+    let mut h = Hasher::new(MessageDigest::md5())?;
+    h.update(b"OfflinePlayer:")?;
+    h.update(username.as_bytes())?;
+    let digest = h.finish()?;
+
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&digest);
+
+    Ok(uuid::Builder::from_bytes(b)
+        .set_version(uuid::Version::Md5)
+        .set_variant(uuid::Variant::RFC4122)
+        .build())
+}
+
 // TODO: move
+///```
+/// use openssl::sha::sha1;
+/// use siderite_core::auth;
+///
+/// let hex = auth::java_hex_digest(sha1(b"Notch"));
+/// assert_eq!(&hex, "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48");
+///```
 pub fn java_hex_digest(mut input: [u8; 20]) -> String {
     const fn hex(byte: u8) -> u8 {
         b"0123456789abcdef"[byte as usize]
@@ -102,24 +133,17 @@ mod tests {
     use super::*;
     use openssl::sha::sha1;
 
-    #[test]
-    fn notch() {
-        let hash = java_hex_digest(sha1(b"Notch"));
-        println!("Notch: {}", hash);
-        assert_eq!(&hash, "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48");
+    macro_rules! java_hex_digest_test {
+        ($func_name:ident, $arg:expr, $expected:expr) => {
+            #[test]
+            fn $func_name() {
+                let hash = java_hex_digest(sha1($arg));
+                assert_eq!(&hash, $expected);
+            }
+        };
     }
 
-    #[test]
-    fn jeb_() {
-        let hash = java_hex_digest(sha1(b"jeb_"));
-        println!("jeb_: {}", hash);
-        assert_eq!(&hash, "-7c9d5b0044c130109a5d7b5fb5c317c02b4e28c1");
-    }
-
-    #[test]
-    fn simon() {
-        let hash = java_hex_digest(sha1(b"simon"));
-        println!("simon: {}", hash);
-        assert_eq!(&hash, "88e16a1019277b15d58faf0541e11910eb756f6");
-    }
+    java_hex_digest_test!(notch, b"Notch", "4ed1f46bbe04bc756bcb17c0c7ce3e4632f06a48");
+    java_hex_digest_test!(jeb_, b"jeb_", "-7c9d5b0044c130109a5d7b5fb5c317c02b4e28c1");
+    java_hex_digest_test!(simon, b"simon", "88e16a1019277b15d58faf0541e11910eb756f6");
 }

@@ -3,16 +3,19 @@ use std::fs::File;
 use std::error::Error;
 use std::result::Result;
 use std::sync::Arc;
-use std::thread;
 
 use log::*;
+use tokio;
+use tokio::task;
+
 use siderite_core::auth::*;
 use siderite_core::server::*;
 
 const FAVICON_FILENAME: &str = "favicon.png";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     info!("Starting siderite version {}", VERSION);
@@ -45,10 +48,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let server_ref = Arc::new(server);
     let server_ref2 = server_ref.clone();
 
-    let authenticator = get_authenticator();
-    thread::spawn(move || {
+    let authenticator = get_authenticator("mojang");
+    task::spawn(async move {
         for m in rx.iter() {
-            match authenticator.authenticate(m) {
+            match authenticator.authenticate(m).await {
                 Ok(o) => server_ref2.auth_user(o.client_id, o.username, o.uuid, o.properties),
                 Err(e) => error!("Failed auth with {:?}", e)
             }
@@ -60,9 +63,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_authenticator() -> Box<dyn Authenticator + Send> {
+fn get_authenticator(authenticator: &str) -> Box<dyn Authenticator> {
     #[cfg(feature = "mojang_auth")]
-    return Box::new(siderite_mojang::MojangAuthenticator) as Box<dyn Authenticator + Send>;
+    if authenticator == "mojang" {
+        return Box::new(siderite_mojang::MojangAuthenticator::new()) as Box<dyn Authenticator>;
+    }
 
-    return Box::new(DefaultAuthenticator) as Box<dyn Authenticator + Send>;
+    if !authenticator.is_empty() && authenticator != "offline" {
+        warn!("Unknown authenticator: {}", authenticator);
+    }
+
+    warn!("**** SERVER IS RUNNING IN OFFLINE MODE!");
+    return Box::new(OfflineAuthenticator) as Box<dyn Authenticator + Send + Sync>;
 }

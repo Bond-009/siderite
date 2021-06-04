@@ -7,12 +7,12 @@ repository = "https://github.com/Bond-009/siderite.git"
 edition = "2018"
 
 [dependencies]
+async-trait = "^0.1"
 serde_json = "^1.0"
 
 [dependencies.uuid]
 version = "^0.8"
 default-features = false
-features = ["v3"]
 
 [dependencies.siderite-core]
 path = "../siderite-core"

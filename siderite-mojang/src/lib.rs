@@ -1,18 +1,30 @@
-
+use async_trait::async_trait;
+use mojang::MojangClient;
 use uuid::Uuid;
 
 use siderite_core::auth::*;
 
-pub struct MojangAuthenticator;
+pub struct MojangAuthenticator {
+    client: MojangClient
+}
 
+impl MojangAuthenticator {
+    pub fn new() -> MojangAuthenticator {
+        MojangAuthenticator {
+            client: MojangClient::new()
+        }
+    }
+}
+
+
+#[async_trait]
 impl Authenticator for MojangAuthenticator {
-    fn authenticate(&self, info: AuthInfo) -> Result {
+    async fn authenticate(&self, info: AuthInfo) -> Result {
         if info.server_id.is_none() {
             return Err(Error::NoServerId);
         }
 
-        // TODO: handle errors?
-        let res = mojang::auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).unwrap();
+        let res = self.client.auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).await.map_err(|_| Error::Failed)?;
         let uuid = Uuid::parse_str(&res.id).unwrap();
 
         Ok(AuthResponse {
