@@ -1,7 +1,7 @@
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::{Duration, SystemTime};
+
+use crossbeam_channel::{Receiver, Sender};
 
 use crate::TICK_DURATION;
 use crate::protocol::Protocol;
@@ -15,8 +15,8 @@ pub struct ProtocolThread {
 }
 
 impl ProtocolThread {
-    pub fn start() -> mpsc::Sender<Protocol> {
-        let (tx, rx) = mpsc::channel();
+    pub fn start() -> Sender<Protocol> {
+        let (tx, rx) = crossbeam_channel::unbounded();
 
         thread::spawn(move || {
             let mut thread = ProtocolThread {

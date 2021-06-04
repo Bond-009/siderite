@@ -4,11 +4,11 @@ mod v47;
 
 use std::io::{ErrorKind, Read, Write, Result};
 use std::net::{Shutdown, TcpStream};
-use std::sync::{Arc, RwLock, mpsc};
-use std::sync::mpsc::Receiver;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use circbuf::CircBuf;
+use crossbeam_channel::{Receiver};
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -126,7 +126,7 @@ impl Protocol {
     pub fn new(server: Arc<Server>, stream: TcpStream) -> Protocol {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
         thread_rng().fill(&mut arr[..]);
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = crossbeam_channel::unbounded();
         // The player will get the same ID as the client
         let client_id = server::get_next_entity_id();
         Protocol {

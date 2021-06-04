@@ -3,6 +3,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crossbeam_channel::Sender;
 use log::*;
 use openssl::pkey::Private;
 use openssl::rsa::Rsa;
@@ -45,7 +46,7 @@ pub struct Server {
     port: u16,
     encryption: bool,
 
-    pub authenticator: crossbeam_channel::Sender<AuthInfo>,
+    pub authenticator: Sender<AuthInfo>,
 
     public_key_der: Vec<u8>,
     private_key: Rsa<Private>,
@@ -81,7 +82,7 @@ impl Server {
         &self.public_key_der
     }
 
-    pub fn new(config: ServerConfig, authenticator: crossbeam_channel::Sender<AuthInfo>) -> Server {
+    pub fn new(config: ServerConfig, authenticator: Sender<AuthInfo>) -> Server {
         let rsa = Rsa::generate(1024).unwrap();
         Server {
             // MC Update (1.7.x): The server ID is now sent as an empty string.

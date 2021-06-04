@@ -5,7 +5,6 @@ use std::result::Result;
 use std::sync::Arc;
 
 use log::*;
-use tokio;
 use tokio::task;
 
 use siderite_core::auth::*;
@@ -74,5 +73,5 @@ fn get_authenticator(authenticator: &str) -> Box<dyn Authenticator> {
     }
 
     warn!("**** SERVER IS RUNNING IN OFFLINE MODE!");
-    return Box::new(OfflineAuthenticator) as Box<dyn Authenticator + Send + Sync>;
+    return Box::new(OfflineAuthenticator) as Box<dyn Authenticator>;
 }
