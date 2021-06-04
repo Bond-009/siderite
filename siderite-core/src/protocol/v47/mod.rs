@@ -34,7 +34,7 @@ impl SerializeChunk for Chunk {
     }
 }
 
-fn write_block_info<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+pub fn write_block_info<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
     where W : Write {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -47,7 +47,7 @@ fn write_block_info<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<(
     write_block_info_fallback(sections, &mut buf)
 }
 
-fn write_block_info_fallback<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+pub fn write_block_info_fallback<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
     where W : Write {
 
     for section in sections.iter().filter_map(|x| x.as_ref()) {
@@ -63,7 +63,7 @@ fn write_block_info_fallback<W>(sections: &[Option<Section>; 16], mut buf: W) ->
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn write_block_info_avx2<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+pub unsafe fn write_block_info_avx2<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
     where W : Write {
 
     const STEP_SIZE: usize = size_of::<__m256i>() / size_of::<u8>();
