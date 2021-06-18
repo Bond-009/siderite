@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone, Debug)]
 #[repr(align(32))]
 pub struct Section {
     pub block_types: [u8; SECTION_BLOCK_COUNT],

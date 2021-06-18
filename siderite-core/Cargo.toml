@@ -26,3 +26,8 @@ default-features = false
 
 [dependencies.mcrw]
 git = "https://gitlab.com/siderite/mcrw.git"
+
+[dev-dependencies]
+array-init = "^2.0"
+quickcheck = "^1.0"
+quickcheck_macros = "^1.0"

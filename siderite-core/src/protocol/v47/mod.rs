@@ -95,3 +95,56 @@ unsafe fn write_block_info_avx2<W>(sections: &[Option<Section>; 16], mut buf: W)
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use array_init::array_init;
+    use quickcheck::{Arbitrary, Gen};
+    use quickcheck_macros::quickcheck;
+
+    use super::*;
+
+    use crate::storage::chunk::ChunkColumn;
+
+    impl Arbitrary for Section {
+        fn arbitrary(g: &mut Gen) -> Section {
+            Section {
+                block_types: array_init(|_| u8::arbitrary(g)),
+                block_metas: array_init(|_| u8::arbitrary(g)),
+                block_light: array_init(|_| u8::arbitrary(g)),
+                block_sky_light: array_init(|_| u8::arbitrary(g))
+            }
+        }
+    }
+
+    impl Arbitrary for ChunkColumn {
+        fn arbitrary(g: &mut Gen) -> ChunkColumn {
+            ChunkColumn {
+                sections: array_init(|_| Option::<Section>::arbitrary(g))
+            }
+        }
+    }
+
+    macro_rules! create_output_buf {
+        () => { Vec::with_capacity(SECTION_BLOCK_COUNT * 2); }
+    }
+
+    #[quickcheck]
+    fn write_block_info_matches_fallback(data: Box<ChunkColumn>) -> bool {
+        let mut buf1 = create_output_buf!();
+        let mut buf2 = create_output_buf!();
+        write_block_info(&data.sections, &mut buf1).unwrap();
+        write_block_info_fallback(&data.sections, &mut buf2).unwrap();
+        &buf1 == &buf2
+    }
+
+    #[quickcheck]
+    #[cfg(target_feature = "avx2")]
+    fn write_block_info_avx2_matches_fallback(data: Box<ChunkColumn>) -> bool {
+        let mut buf1 = create_output_buf!();
+        let mut buf2 = create_output_buf!();
+        unsafe { write_block_info_avx2(&data.sections, &mut buf1).unwrap(); }
+        write_block_info_fallback(&data.sections, &mut buf2).unwrap();
+        &buf1 == &buf2
+    }
+}

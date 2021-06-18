@@ -30,6 +30,7 @@ pub trait SerializeChunk {
     fn serialize<W: Write>(&self, w: W) -> Result<()>;
 }
 
+#[derive(Clone, Debug)]
 pub struct ChunkColumn {
     pub sections: [Option<Section>; SECTION_COUNT]
 }
