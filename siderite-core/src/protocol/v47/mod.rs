@@ -8,7 +8,7 @@ use std::arch::x86_64::*;
 
 use mcrw::MCWriteExt;
 
-use crate::storage::chunk::{AREA, SECTION_BLOCK_COUNT, SerializeChunk, Chunk};
+use crate::storage::chunk::{AREA, SECTION_BLOCK_COUNT, SECTION_COUNT, SerializeChunk, Chunk};
 use crate::storage::chunk::section::Section;
 
 impl SerializeChunk for Chunk {
@@ -34,61 +34,77 @@ impl SerializeChunk for Chunk {
     }
 }
 
-fn write_block_info<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+fn write_block_info<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
-        if is_x86_feature_detected!("avx2") {
-            return unsafe { write_block_info_avx2(sections, &mut buf) };
+        if is_x86_feature_detected!("sse2") {
+            return unsafe { write_block_info_sse2(sections, &mut buf) };
         }
     }
 
     write_block_info_fallback(sections, &mut buf)
 }
 
-fn write_block_info_fallback<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+fn write_block_info_fallback<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
+    let mut tmp = [0u8; 4];
     for section in sections.iter().filter_map(|x| x.as_ref()) {
-        for i in 0..SECTION_BLOCK_COUNT {
-            let block_type = section.block_types[i];
-            let block_meta = section.block_metas[i / 2] >> ((i & 1) * 4) & 0x0f;
-            buf.write_ubyte((block_type << 4) | block_meta)?;
-            buf.write_ubyte(block_type >> 4)?;
+        for i in 0..(SECTION_BLOCK_COUNT / 2) {
+            let block_type1 = section.block_types[i * 2];
+            let block_type2 = section.block_types[i * 2 + 1];
+            let block_metas = section.block_metas[i];
+            tmp[0] = (block_type1 << 4) | (block_metas & 0x0f);
+            tmp[1] = block_type1 >> 4;
+            tmp[2] = (block_type2 << 4) | (block_metas >> 4);
+            tmp[3] = block_type2 >> 4;
+            buf.write_all(&tmp)?;
         }
     }
 
     Ok(())
 }
 
-#[target_feature(enable = "avx2")]
-unsafe fn write_block_info_avx2<W>(sections: &[Option<Section>; 16], mut buf: W) -> Result<()>
+#[target_feature(enable = "sse2")]
+unsafe fn write_block_info_sse2<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
-    const STEP_SIZE: usize = size_of::<__m256i>() / size_of::<u8>();
+    const STEP_SIZE: usize = 2 * size_of::<__m128i>() / size_of::<u8>();
 
-    let low_mask = _mm256_set1_epi8(0x0f);
+    let low_mask = _mm_set1_epi8(0x0f);
     let mut write_buf = [0u8; STEP_SIZE * 2];
 
     for section in sections.iter().filter_map(|x| x.as_ref()) {
         for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
-            let in_types = _mm256_load_si256(section.block_types[i * STEP_SIZE..].as_ptr() as *const __m256i);
+
+            let in_types1 = _mm_load_si128(section.block_types[i * STEP_SIZE..].as_ptr() as *const __m128i);
+            let in_types2 = _mm_load_si128(section.block_types[(i * STEP_SIZE) + (STEP_SIZE / 2)..].as_ptr() as *const __m128i);
+
             let in_metas128 = _mm_load_si128(section.block_metas[i * (STEP_SIZE / 2)..].as_ptr() as *const __m128i);
             let in_metas128_shifted = _mm_srli_epi16(in_metas128, 4);
 
-            let metas_low = _mm_unpacklo_epi8(in_metas128, in_metas128_shifted);
-            let metas_high = _mm_unpackhi_epi8(in_metas128, in_metas128_shifted);
-            let mut metas = _mm256_set_m128i(metas_high, metas_low);
-            metas = _mm256_and_si256(metas, low_mask);
+            let metas1 = _mm_and_si128(_mm_unpacklo_epi8(in_metas128, in_metas128_shifted), low_mask);
+            let metas2 = _mm_and_si128(_mm_unpackhi_epi8(in_metas128, in_metas128_shifted), low_mask);
 
-            let types_shift_left = _mm256_andnot_si256(low_mask, _mm256_slli_epi16(in_types, 4));
-            let types_shift_right = _mm256_and_si256(low_mask, _mm256_srli_epi16(in_types, 4));
-            let types_with_metas = _mm256_or_si256(types_shift_left, metas);
-            let first = _mm256_unpacklo_epi8(types_with_metas, types_shift_right);
-            let second = _mm256_unpackhi_epi8(types_with_metas, types_shift_right);
-            _mm256_storeu2_m128i(write_buf[STEP_SIZE..].as_mut_ptr() as *mut __m128i, write_buf.as_mut_ptr() as *mut __m128i, first);
-            _mm256_storeu2_m128i(write_buf[STEP_SIZE + STEP_SIZE / 2..].as_mut_ptr() as *mut __m128i, write_buf[STEP_SIZE / 2..].as_mut_ptr() as *mut __m128i, second);
+            let types_shift_right1 = _mm_and_si128(low_mask, _mm_srli_epi16(in_types1, 4));
+            let types_shift_left1 = _mm_andnot_si128(low_mask, _mm_slli_epi16(in_types1, 4));
+            let types_with_metas1 = _mm_or_si128(types_shift_left1, metas1);
+            let types_shift_right2 = _mm_and_si128(low_mask, _mm_srli_epi16(in_types2, 4));
+            let types_shift_left2 = _mm_andnot_si128(low_mask, _mm_slli_epi16(in_types2, 4));
+            let types_with_metas2 = _mm_or_si128(types_shift_left2, metas2);
+
+            let first = _mm_unpacklo_epi8(types_with_metas1, types_shift_right1);
+            let second = _mm_unpackhi_epi8(types_with_metas1, types_shift_right1);
+            let third = _mm_unpacklo_epi8(types_with_metas2, types_shift_right2);
+            let fourth = _mm_unpackhi_epi8(types_with_metas2, types_shift_right2);
+
+            _mm_storeu_si128(write_buf.as_mut_ptr() as *mut __m128i, first);
+            _mm_storeu_si128(write_buf[STEP_SIZE / 2..].as_mut_ptr() as *mut __m128i, second);
+            _mm_storeu_si128(write_buf[STEP_SIZE..].as_mut_ptr() as *mut __m128i, third);
+            _mm_storeu_si128(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr() as *mut __m128i, fourth);
+
             buf.write_all(&write_buf)?;
         }
     }
@@ -139,11 +155,11 @@ mod tests {
     }
 
     #[quickcheck]
-    #[cfg(target_feature = "avx2")]
-    fn write_block_info_avx2_matches_fallback(data: Box<ChunkColumn>) -> bool {
+    #[cfg(target_feature = "sse2")]
+    fn write_block_info_sse2_matches_fallback(data: Box<ChunkColumn>) -> bool {
         let mut buf1 = create_output_buf!();
         let mut buf2 = create_output_buf!();
-        unsafe { write_block_info_avx2(&data.sections, &mut buf1).unwrap(); }
+        unsafe { write_block_info_sse2(&data.sections, &mut buf1).unwrap(); }
         write_block_info_fallback(&data.sections, &mut buf2).unwrap();
         &buf1 == &buf2
     }
