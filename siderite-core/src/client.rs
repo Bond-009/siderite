@@ -27,8 +27,8 @@ pub struct Client {
 
 impl Client {
 
-    pub fn new(id: u32, server: Arc<Server>, protocol: Sender<Packet>) -> Client {
-         Client {
+    pub fn new(id: u32, server: Arc<Server>, protocol: Sender<Packet>) -> Self {
+         Self {
             id,
             username: None,
             uuid: Uuid::nil(),
@@ -37,7 +37,7 @@ impl Client {
             player: None,
 
             server,
-            protocol: protocol,
+            protocol,
         }
     }
 
@@ -117,12 +117,12 @@ impl Client {
             }
         }
 
-        self.protocol.send(Packet::TimeUpdate(world.clone())).unwrap();
+        self.protocol.send(Packet::TimeUpdate(world)).unwrap();
         self.protocol.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
         self.protocol.send(
             Packet::PlayerListAddPlayer(
                 self.server.get_client(self.id).unwrap(),
-                player.clone())).unwrap();
+                player)).unwrap();
     }
 
     pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {

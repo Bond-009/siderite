@@ -9,8 +9,8 @@ pub struct MojangAuthenticator {
 }
 
 impl MojangAuthenticator {
-    pub fn new() -> MojangAuthenticator {
-        MojangAuthenticator {
+    pub fn new() -> Self {
+        Self {
             client: MojangClient::new()
         }
     }

@@ -73,5 +73,5 @@ fn get_authenticator(authenticator: &str) -> Box<dyn Authenticator> {
     }
 
     warn!("**** SERVER IS RUNNING IN OFFLINE MODE!");
-    return Box::new(OfflineAuthenticator) as Box<dyn Authenticator>;
+    Box::new(OfflineAuthenticator) as Box<dyn Authenticator>
 }

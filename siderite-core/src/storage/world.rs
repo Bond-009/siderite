@@ -43,8 +43,8 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(config: WorldConfig) -> World {
-        World {
+    pub fn new(config: WorldConfig) -> Self {
+        Self {
             _name: config.name,
             dimension: config.dimension,
             difficulty: config.difficulty,

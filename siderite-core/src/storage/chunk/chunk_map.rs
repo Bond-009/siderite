@@ -12,8 +12,8 @@ pub struct ChunkMap {
 }
 
 impl ChunkMap {
-    pub fn new() -> ChunkMap {
-        ChunkMap {
+    pub fn new() -> Self {
+        Self {
             chunks: RwLock::new(HashMap::new())
         }
     }

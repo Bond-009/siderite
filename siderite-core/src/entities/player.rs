@@ -55,9 +55,9 @@ impl Player {
         client: Arc<RwLock<Client>>,
         world: Arc<RwLock<World>>,
         gamemode: GameMode,
-        pos: Coord<f64>) -> Player
+        pos: Coord<f64>) -> Self
     {
-        Player {
+        Self {
             client,
             world,
 
