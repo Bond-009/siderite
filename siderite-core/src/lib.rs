@@ -1,3 +1,5 @@
+#![feature(test)]
+
 pub mod auth;
 pub mod blocks;
 pub mod coord;

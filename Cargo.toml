@@ -1,10 +1,12 @@
 [workspace]
-
 members = [
     "siderite",
     "siderite-core",
     "siderite-mojang"
 ]
+
+[profile.bench]
+debug = true
 
 [profile.release]
 lto = true

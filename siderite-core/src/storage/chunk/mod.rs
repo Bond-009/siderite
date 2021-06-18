@@ -17,19 +17,20 @@ pub const WIDTH: i32 = 16;
 pub const HEIGHT: i32 = WIDTH * SECTION_COUNT as i32;
 
 /// Area of a chunk
-pub const AREA: i32 = WIDTH * WIDTH;
+pub const AREA: usize = (WIDTH * WIDTH) as usize;
 
 /// Number of sections in a chunk column
 pub const SECTION_COUNT: usize = 16;
 
 /// Number of blocks in one section
-pub const SECTION_BLOCK_COUNT: usize = (AREA * WIDTH) as usize;
+pub const SECTION_BLOCK_COUNT: usize = AREA * WIDTH as usize;
 
 pub trait SerializeChunk {
     fn serialized_size(&self) -> usize;
     fn serialize<W: Write>(&self, w: W) -> Result<()>;
 }
 
+#[derive(Clone, Debug)]
 pub struct ChunkColumn {
     pub sections: [Option<Section>; SECTION_COUNT]
 }
@@ -131,13 +132,13 @@ impl ChunkColumn {
     fn get_indices_from_rel_pos(rel_pos: Coord<i32>) -> (usize, usize) {
         assert!(!Chunk::is_valid_rel_pos(rel_pos));
 
-        ((rel_pos.y / WIDTH) as usize, (rel_pos.x + rel_pos.z * WIDTH + rel_pos.y * AREA) as usize)
+        ((rel_pos.y / WIDTH) as usize, (rel_pos.x + rel_pos.z * WIDTH + rel_pos.y * AREA as i32) as usize)
     }
 }
 
 pub struct Chunk {
     pub data: ChunkColumn,
-    pub biome_map: [u8; AREA as usize]
+    pub biome_map: [u8; AREA]
 }
 
 impl Chunk {
