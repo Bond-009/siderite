@@ -112,7 +112,7 @@ impl Server {
         let ps = ProtocolThread::start();
 
         let listener = TcpListener::bind(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), svr.port)
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), svr.port)
             ).unwrap();
 
         for connection in listener.incoming() {
