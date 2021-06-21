@@ -69,8 +69,7 @@ impl Client {
     }
 
     pub fn kick(&self, reason: &str) {
-        let packet = Packet::Disconnect(reason.to_owned());
-        self.protocol.send(packet).unwrap();
+        self.protocol.send(Packet::Disconnect(reason.to_owned())).unwrap();
     }
 
     pub fn handle_login(&self, server_id: Option<String>) {
@@ -134,5 +133,9 @@ impl Client {
             DigStatus::DropItem => (),
             DigStatus::ShootArrowFinishEating => ()
         };
+    }
+
+    pub fn send_chat(&self, raw_msg: String) {
+        self.protocol.send(Packet::ChatMessage(raw_msg)).unwrap();
     }
 }

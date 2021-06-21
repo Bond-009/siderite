@@ -164,6 +164,13 @@ impl Server {
         false
     }
 
+    pub fn foreach_client(&self, function: &dyn Fn(&Arc<RwLock<Client>>)) {
+        let clients = self.clients.read().unwrap();
+        for client in clients.values() {
+            function(client);
+        }
+    }
+
     pub fn get_client(&self, client_id: u32) -> Option<Arc<RwLock<Client>>> {
         let clients = self.clients.read().unwrap();
 
@@ -204,8 +211,16 @@ impl Server {
 
     pub fn kick_user(&self, client_id: u32, reason: &str) {
         self.do_with_client(client_id, &|client: &Arc<RwLock<Client>>| {
-            client.write().unwrap().kick(reason);
+            client.read().unwrap().kick(reason);
             true
+        });
+    }
+
+    pub fn broadcast_chat(&self, username: &str, msg: &str) {
+        let raw_msg = format!("<{}>: {}", username, msg);
+        info!("{}", raw_msg);
+        self.foreach_client(&|client: &Arc<RwLock<Client>>| {
+            client.read().unwrap().send_chat(raw_msg.clone());
         });
     }
 }

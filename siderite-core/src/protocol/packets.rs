@@ -13,6 +13,8 @@ pub enum Packet {
     LoginSuccess(),
 
     // Play state
+    /// Raw Chat Message
+    ChatMessage(String),
     /// Player, World
     JoinGame(Arc<RwLock<Player>>, Arc<RwLock<World>>),
     /// World

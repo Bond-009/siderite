@@ -346,7 +346,7 @@ impl Protocol {
                     }
                 }
             }
-            State::Disconnected => return // Ignore all packets
+            State::Disconnected => {} // Ignore all packets
         }
     }
 
@@ -376,6 +376,7 @@ impl Protocol {
         let res = match packet {
             Packet::LoginSuccess()                      => self.login_success(),
 
+            Packet::ChatMessage(raw_message)            => self.chat_message(raw_message),
             Packet::JoinGame(player, world)             => self.join_game(player, world),
             Packet::TimeUpdate(world)                   => self.time_update(world),
             Packet::SpawnPosition(world)                => self.spawn_position(world),
@@ -663,10 +664,13 @@ impl Protocol {
 
         let msg = rbuf.read_string().unwrap();
         if msg.starts_with('/') {
-            // Exec cmd
+            // TODO: exec cmd
+            return;
         }
 
-        info!("{}", msg);
+        let client = self.client.read().unwrap();
+        let username = client.get_username().unwrap();
+        self.server.broadcast_chat(username, &msg);
     }
 
     /// This packet is used to indicate whether the player is on ground (walking/swimming),
@@ -919,6 +923,19 @@ impl Protocol {
         wbuf.write_ubyte(max_players as u8).unwrap(); // Max players
         wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
         wbuf.write_bool(false).unwrap(); // Reduced debug info?
+
+        self.write_packet(&wbuf)
+    }
+
+    fn chat_message(&mut self, raw_msg: String) -> Result<()> {
+        debug_assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x02).unwrap(); // Chat Message packet
+
+        // TODO:
+        wbuf.write_string(&format!("{{ \"text\": \"{}\" }}", raw_msg)).unwrap(); // JSON Data
+        wbuf.write_ubyte(0).unwrap(); // Position: 0: chat (chat box), 1: system message (chat box), 2: above hotbar
 
         self.write_packet(&wbuf)
     }
