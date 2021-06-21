@@ -250,7 +250,7 @@ impl Protocol {
     }
 
     fn handle_in_packets(&mut self) {
-        loop {
+        while self.state != State::Disconnected {
             if self.received_data.is_empty() {
                 // No data
                 return;
@@ -302,23 +302,33 @@ impl Protocol {
                 }
             }
             State::Status => {
-                match id {
+                let res = match id {
                     0x00 => self.handle_request(),
                     0x01 => self.handle_ping(rbuf),
                     _ => {
                         self.unknown_packet(id);
-                        self.shutdown().unwrap();
+                        self.shutdown()
                     }
+                };
+
+                if let Err(e) = res {
+                    error!("Error while handling packets: {}", e);
+                    self.state = State::Disconnected;
                 }
             }
             State::Login => {
-                match id {
+                let res = match id {
                     0x00 => self.handle_login_start(rbuf),
                     0x01 => self.handle_encryption_response(rbuf),
                     _ => {
                         self.unknown_packet(id);
-                        self.disconnect(&format!("Unknown packet: {:#X}", id)).unwrap();
+                        self.disconnect(&format!("Unknown packet: {:#X}", id))
                     }
+                };
+
+                if let Err(e) = res {
+                    error!("Error while handling packets: {}", e);
+                    self.state = State::Disconnected;
                 }
             }
             State::Play => {
@@ -460,7 +470,7 @@ impl Protocol {
 
     // Status packets:
 
-    fn handle_request(&mut self) {
+    fn handle_request(&mut self) -> Result<()> {
         debug_assert_eq!(self.state, State::Status);
 
         let mut wbuf = Vec::new();
@@ -495,10 +505,10 @@ impl Protocol {
         let strres = response.to_string();
         debug!("{}", strres);
         wbuf.write_string(&strres).unwrap();
-        self.write_packet(&wbuf).unwrap();
+        self.write_packet(&wbuf)
     }
 
-    fn handle_ping(&mut self, mut rbuf: &[u8]) {
+    fn handle_ping(&mut self, mut rbuf: &[u8]) -> Result<()> {
         debug_assert_eq!(self.state, State::Status);
 
         let mut wbuf = Vec::new();
@@ -506,24 +516,26 @@ impl Protocol {
         let payload = rbuf.read_long().unwrap();
         debug!("Ping payload: {}", payload);
         wbuf.write_long(payload).unwrap();
-        self.write_packet(&wbuf).unwrap();
+        self.write_packet(&wbuf)
     }
 
     // Login packets:
 
-    fn handle_login_start(&mut self, mut rbuf: &[u8]) {
+    fn handle_login_start(&mut self, mut rbuf: &[u8]) -> Result<()> {
         let username = rbuf.read_string().unwrap();
         self.client.write().unwrap().set_username(username);
 
         if self.server.encryption() {
-            self.encryption_request();
+            return self.encryption_request();
         }
         else {
             self.client.write().unwrap().handle_login(None);
         }
+
+        Ok(())
     }
 
-    fn handle_encryption_response(&mut self, mut rbuf: &[u8]) {
+    fn handle_encryption_response(&mut self, mut rbuf: &[u8]) -> Result<()> {
         let ss_len = rbuf.read_var_int().unwrap() as usize; // Shared Secret Key Length
         let mut ssarr = vec![0u8; ss_len];
         rbuf.read_exact(&mut ssarr).unwrap(); // Shared Secret
@@ -539,14 +551,14 @@ impl Protocol {
         let vtd_len = private_key.private_decrypt(&vtarr, &mut vtdvec, PADDING).unwrap();
         if vtd_len != VERIFY_TOKEN_LEN {
             debug!("Verify Token is the wrong length: expected {}, got {}", VERIFY_TOKEN_LEN, vtd_len);
-            self.disconnect("Hacked client").unwrap();
-            return;
+            self.disconnect("Hacked client")?;
+            return Ok(());
         }
 
         if vtdvec[..VERIFY_TOKEN_LEN] != self.verify_token[..] {
             debug!("Verify Token is not the same");
-            self.disconnect("Hacked client").unwrap();
-            return;
+            self.disconnect("Hacked client")?;
+            return Ok(());
         }
 
         // Decrypt Shared Secret Key
@@ -554,8 +566,8 @@ impl Protocol {
         let ssd_len = private_key.private_decrypt(&ssarr, &mut ssdvec, PADDING).unwrap();
         if ssd_len != ENCRYPTION_KEY_LEN {
             debug!("Shared Secret Key is the wrong length: expected {}, got {}", ENCRYPTION_KEY_LEN, ssd_len);
-            self.disconnect("Hacked client").unwrap();
-            return;
+            self.disconnect("Hacked client")?;
+            return Ok(());
         }
 
         self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
@@ -579,9 +591,11 @@ impl Protocol {
         let hash = hasher.finish();
         let server_id = auth::java_hex_digest(hash);
         self.client.read().unwrap().handle_login(Some(server_id));
+
+        Ok(())
     }
 
-    fn encryption_request(&mut self) {
+    fn encryption_request(&mut self) -> Result<()> {
         debug_assert_eq!(self.state, State::Login);
 
         let mut wbuf = Vec::new();
@@ -595,7 +609,7 @@ impl Protocol {
         wbuf.write_var_int(self.verify_token.len() as i32).unwrap();
         wbuf.write_all(&self.verify_token).unwrap();
 
-        self.write_packet(&wbuf).unwrap();
+        self.write_packet(&wbuf)
     }
 
     fn login_success(&mut self) -> Result<()> {
