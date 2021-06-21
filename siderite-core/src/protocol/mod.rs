@@ -1164,3 +1164,9 @@ impl Protocol {
             || e == ErrorKind::BrokenPipe
     }
 }
+
+impl Drop for Protocol {
+    fn drop(&mut self) {
+        self.server.remove_client(self.client_id);
+    }
+}

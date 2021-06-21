@@ -130,7 +130,14 @@ impl Server {
 
             let mut clients = svr.clients.write().unwrap();
             clients.insert(client_id, client);
+            debug!("Added client with id: {}", client_id);
         }
+    }
+
+    pub fn remove_client(&self, client_id: u32) {
+        let mut clients = self.clients.write().unwrap();
+        clients.remove(&client_id);
+        debug!("Removed client with id: {}", client_id);
     }
 
     pub fn load_worlds(&mut self) {
