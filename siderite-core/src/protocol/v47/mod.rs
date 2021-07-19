@@ -34,7 +34,7 @@ impl SerializeChunk for Chunk {
     }
 }
 
-fn write_block_info<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
+fn write_block_info<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -47,7 +47,7 @@ fn write_block_info<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) 
     write_block_info_fallback(sections, &mut buf)
 }
 
-fn write_block_info_fallback<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
+fn write_block_info_fallback<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
     let mut tmp = [0u8; 4];
@@ -68,7 +68,7 @@ fn write_block_info_fallback<W>(sections: &[Option<Section>; SECTION_COUNT], mut
 }
 
 #[target_feature(enable = "sse2")]
-unsafe fn write_block_info_sse2<W>(sections: &[Option<Section>; SECTION_COUNT], mut buf: W) -> Result<()>
+unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
 
     const STEP_SIZE: usize = 2 * size_of::<__m128i>() / size_of::<u8>();
@@ -136,7 +136,7 @@ mod tests {
     impl Arbitrary for ChunkColumn {
         fn arbitrary(g: &mut Gen) -> ChunkColumn {
             ChunkColumn {
-                sections: array_init(|_| Option::<Section>::arbitrary(g))
+                sections: array_init(|_| Option::<Box<Section>>::arbitrary(g))
             }
         }
     }
@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[quickcheck]
-    fn write_block_info_matches_fallback(data: Box<ChunkColumn>) -> bool {
+    fn write_block_info_matches_fallback(data: ChunkColumn) -> bool {
         let mut buf1 = create_output_buf!();
         let mut buf2 = create_output_buf!();
         write_block_info(&data.sections, &mut buf1).unwrap();
@@ -156,7 +156,7 @@ mod tests {
 
     #[quickcheck]
     #[cfg(target_feature = "sse2")]
-    fn write_block_info_sse2_matches_fallback(data: Box<ChunkColumn>) -> bool {
+    fn write_block_info_sse2_matches_fallback(data: ChunkColumn) -> bool {
         let mut buf1 = create_output_buf!();
         let mut buf2 = create_output_buf!();
         unsafe { write_block_info_sse2(&data.sections, &mut buf1).unwrap(); }

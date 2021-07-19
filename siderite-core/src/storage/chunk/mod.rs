@@ -32,7 +32,7 @@ pub trait SerializeChunk {
 
 #[derive(Clone, Debug)]
 pub struct ChunkColumn {
-    pub sections: [Option<Section>; SECTION_COUNT]
+    pub sections: [Option<Box<Section>>; SECTION_COUNT]
 }
 
 impl ChunkColumn {
@@ -70,12 +70,12 @@ impl ChunkColumn {
                 return;
             }
 
-            self.sections[section] = Some(Section {
+            self.sections[section] = Some(Box::new(Section {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
                 block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
-            });
+            }));
         }
 
         match &mut self.sections[section] {
@@ -101,12 +101,12 @@ impl ChunkColumn {
                 return;
             }
 
-            self.sections[section] = Some(Section {
+            self.sections[section] = Some(Box::new(Section {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
                 block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
-            });
+            }));
         }
 
         match &mut self.sections[section] {
