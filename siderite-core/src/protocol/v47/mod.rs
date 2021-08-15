@@ -79,10 +79,10 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     for section in sections.iter().filter_map(|x| x.as_ref()) {
         for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
 
-            let in_types1 = _mm_load_si128(section.block_types[i * STEP_SIZE..].as_ptr() as *const __m128i);
-            let in_types2 = _mm_load_si128(section.block_types[(i * STEP_SIZE) + (STEP_SIZE / 2)..].as_ptr() as *const __m128i);
+            let in_types1 = _mm_load_si128(section.block_types[i * STEP_SIZE..].as_ptr().cast());
+            let in_types2 = _mm_load_si128(section.block_types[(i * STEP_SIZE) + (STEP_SIZE / 2)..].as_ptr().cast());
 
-            let in_metas128 = _mm_load_si128(section.block_metas[i * (STEP_SIZE / 2)..].as_ptr() as *const __m128i);
+            let in_metas128 = _mm_load_si128(section.block_metas[i * (STEP_SIZE / 2)..].as_ptr().cast());
             let in_metas128_shifted = _mm_srli_epi16(in_metas128, 4);
 
             let metas1 = _mm_and_si128(_mm_unpacklo_epi8(in_metas128, in_metas128_shifted), low_mask);
@@ -100,10 +100,10 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let third = _mm_unpacklo_epi8(types_with_metas2, types_shift_right2);
             let fourth = _mm_unpackhi_epi8(types_with_metas2, types_shift_right2);
 
-            _mm_storeu_si128(write_buf.as_mut_ptr() as *mut __m128i, first);
-            _mm_storeu_si128(write_buf[STEP_SIZE / 2..].as_mut_ptr() as *mut __m128i, second);
-            _mm_storeu_si128(write_buf[STEP_SIZE..].as_mut_ptr() as *mut __m128i, third);
-            _mm_storeu_si128(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr() as *mut __m128i, fourth);
+            _mm_storeu_si128(write_buf.as_mut_ptr().cast(), first);
+            _mm_storeu_si128(write_buf[STEP_SIZE / 2..].as_mut_ptr().cast(), second);
+            _mm_storeu_si128(write_buf[STEP_SIZE..].as_mut_ptr().cast(), third);
+            _mm_storeu_si128(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr().cast(), fourth);
 
             buf.write_all(&write_buf)?;
         }
