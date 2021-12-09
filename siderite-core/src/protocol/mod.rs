@@ -421,7 +421,7 @@ impl Protocol {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
-                    buf.write_var_int(mcrw::var_int_size(length) + comp_buf.len() as i32)?;
+                    buf.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
                     buf.write_var_int(length)?;
                     buf.write_all(&comp_buf)?;
                 } else {
@@ -442,7 +442,7 @@ impl Protocol {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
-                    self.stream.write_var_int(mcrw::var_int_size(length) + comp_buf.len() as i32)?;
+                    self.stream.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
                     self.stream.write_var_int(length)?;
                     self.stream.write_all(&comp_buf)?;
                 } else {
