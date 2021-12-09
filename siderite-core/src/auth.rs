@@ -112,19 +112,18 @@ pub fn java_hex_digest(mut input: [u8; 20]) -> String {
         s.push(hex(b & 0x0f));
     }
 
-    // Whe know the string is valid UTF-8
+    // We know the string is valid UTF-8
     unsafe { String::from_utf8_unchecked(s) }
 }
 
 #[inline]
-fn twos_compliment(arr: &mut [u8]) {
+fn twos_compliment(arr: &mut [u8; 20]) {
     let mut carry = true;
-    for i in (0..arr.len()).rev() {
-        arr[i] = !arr[i];
-        if carry {
-            carry = arr[i] == 0xFF;
-            arr[i] = arr[i].wrapping_add(1);
-        }
+    for x in arr.iter_mut().rev() {
+        // TODO: https://github.com/rust-lang/rust/issues/71126
+        let (val, tmp_carry) = (!*x).overflowing_add(carry as u8);
+        *x = val;
+        carry = tmp_carry;
     }
 }
 
