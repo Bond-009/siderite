@@ -142,7 +142,7 @@ mod tests {
     }
 
     macro_rules! create_output_buf {
-        () => { Vec::with_capacity(SECTION_BLOCK_COUNT * 2); }
+        () => { Vec::with_capacity(SECTION_BLOCK_COUNT * 2) }
     }
 
     #[quickcheck]
@@ -151,7 +151,7 @@ mod tests {
         let mut buf2 = create_output_buf!();
         write_block_info(&data.sections, &mut buf1).unwrap();
         write_block_info_fallback(&data.sections, &mut buf2).unwrap();
-        &buf1 == &buf2
+        buf1 == buf2
     }
 
     #[quickcheck]
@@ -161,6 +161,6 @@ mod tests {
         let mut buf2 = create_output_buf!();
         unsafe { write_block_info_sse2(&data.sections, &mut buf1).unwrap(); }
         write_block_info_fallback(&data.sections, &mut buf2).unwrap();
-        &buf1 == &buf2
+        buf1 == buf2
     }
 }
