@@ -17,7 +17,7 @@ env_logger = "^0.9"
 log = "^0.4"
 
 [dependencies.tokio]
-version = "^1.6"
+version = "^1.14"
 features = [ "rt-multi-thread", "macros" ]
 
 [dependencies.siderite-core]
