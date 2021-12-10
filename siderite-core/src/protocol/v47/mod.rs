@@ -83,16 +83,16 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let in_types2 = _mm_load_si128(section.block_types[(i * STEP_SIZE) + (STEP_SIZE / 2)..].as_ptr().cast());
 
             let in_metas128 = _mm_load_si128(section.block_metas[i * (STEP_SIZE / 2)..].as_ptr().cast());
-            let in_metas128_shifted = _mm_srli_epi16(in_metas128, 4);
+            let in_metas128_shifted = _mm_srli_epi16::<4>(in_metas128);
 
             let metas1 = _mm_and_si128(_mm_unpacklo_epi8(in_metas128, in_metas128_shifted), low_mask);
             let metas2 = _mm_and_si128(_mm_unpackhi_epi8(in_metas128, in_metas128_shifted), low_mask);
 
-            let types_shift_right1 = _mm_and_si128(low_mask, _mm_srli_epi16(in_types1, 4));
-            let types_shift_left1 = _mm_andnot_si128(low_mask, _mm_slli_epi16(in_types1, 4));
+            let types_shift_right1 = _mm_and_si128(low_mask, _mm_srli_epi16::<4>(in_types1));
+            let types_shift_left1 = _mm_andnot_si128(low_mask, _mm_slli_epi16::<4>(in_types1));
             let types_with_metas1 = _mm_or_si128(types_shift_left1, metas1);
-            let types_shift_right2 = _mm_and_si128(low_mask, _mm_srli_epi16(in_types2, 4));
-            let types_shift_left2 = _mm_andnot_si128(low_mask, _mm_slli_epi16(in_types2, 4));
+            let types_shift_right2 = _mm_and_si128(low_mask, _mm_srli_epi16::<4>(in_types2));
+            let types_shift_left2 = _mm_andnot_si128(low_mask, _mm_slli_epi16::<4>(in_types2));
             let types_with_metas2 = _mm_or_si128(types_shift_left2, metas2);
 
             let first = _mm_unpacklo_epi8(types_with_metas1, types_shift_right1);
