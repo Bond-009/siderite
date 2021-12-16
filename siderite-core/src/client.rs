@@ -58,10 +58,7 @@ impl Client {
     }
 
     pub fn get_username(&self) -> Option<&str> {
-        match &self.username {
-            Some(v) => Some(&v),
-            None => None
-        }
+        self.username.as_deref()
     }
 
     pub fn set_username(&mut self, username: String) {
