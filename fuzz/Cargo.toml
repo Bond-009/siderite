@@ -1,0 +1,25 @@
+[package]
+name = "siderite-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.siderite-core]
+path = "../siderite-core"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_java_hex_digest"
+path = "fuzz_targets/fuzz_java_hex_digest.rs"
+test = false
+doc = false
