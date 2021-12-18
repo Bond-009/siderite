@@ -1,6 +1,11 @@
 use std::io::{Result, Write};
 use std::mem::size_of;
 
+#[cfg(target_arch = "aarch64")]
+use std::arch::is_aarch64_feature_detected;
+
+#[cfg(target_arch = "aarch64")]
+use std::arch::aarch64::*;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -45,6 +50,13 @@ fn write_block_info<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf
 
         if is_x86_feature_detected!("sse2") {
             return unsafe { write_block_info_sse2(sections, &mut buf) };
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        if is_aarch64_feature_detected!("neon") {
+            return unsafe { write_block_info_neon(sections, &mut buf) };
         }
     }
 
@@ -194,6 +206,47 @@ unsafe fn write_block_info_avx2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     Ok(())
 }
 
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
+    where W : Write {
+
+    const VECTOR_SIZE: usize = size_of::<uint8x16_t>();
+    const STEP_SIZE: usize = 2 * VECTOR_SIZE;
+    const BUF_SIZE: usize = 2 * STEP_SIZE;
+
+    let low_mask = vdupq_n_u8(0x0f);
+    let mut write_buf = Align16::<BUF_SIZE>::default().0;
+
+    for section in sections.iter().filter_map(|x| x.as_ref()) {
+        for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
+
+            let in_types1 = vld1q_u8(section.block_types[i * STEP_SIZE..].as_ptr());
+            let in_types2 = vld1q_u8(section.block_types[(i * STEP_SIZE) + (STEP_SIZE / 2)..].as_ptr());
+
+            let in_metas128 = vld1q_u8(section.block_metas[i * (STEP_SIZE / 2)..].as_ptr());
+            let in_metas128_shifted = vshrq_n_u8(in_metas128, 4);
+            let in_metas128_low = vandq_u8(in_metas128, low_mask);
+
+            let metas = vzipq_u8(in_metas128_low, in_metas128_shifted);
+
+            let types_shift_right1 = vshrq_n_u8(in_types1, 4);
+            let types_shift_left1 = vshlq_n_u8(in_types1, 4);
+            let types_with_metas1 = vorrq_u8(types_shift_left1, metas.0);
+            let types_shift_right2 = vshrq_n_u8(in_types2, 4);
+            let types_shift_left2 = vshlq_n_u8(in_types2, 4);
+            let types_with_metas2 = vorrq_u8(types_shift_left2, metas.1);
+
+            vst2q_u8(write_buf.as_mut_ptr(), uint8x16x2_t { 0: types_with_metas1, 1: types_shift_right1});
+            vst2q_u8(write_buf[STEP_SIZE..].as_mut_ptr(), uint8x16x2_t { 0: types_with_metas2, 1: types_shift_right2});
+
+            buf.write_all(&write_buf)?;
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::array;
@@ -237,6 +290,7 @@ mod tests {
     }
 
     #[quickcheck]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[cfg(target_feature = "sse2")]
     fn write_block_info_sse2_matches_fallback(data: ChunkColumn) -> bool {
         let mut buf1 = create_output_buf!();
@@ -247,6 +301,7 @@ mod tests {
     }
 
     #[quickcheck]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[cfg(target_feature = "avx2")]
     fn write_block_info_avx2_matches_fallback(data: ChunkColumn) -> bool {
         let mut buf1 = create_output_buf!();
@@ -254,5 +309,16 @@ mod tests {
         unsafe { write_block_info_avx2(&data.sections, buf1.as_mut_slice()).unwrap(); }
         write_block_info_fallback(&data.sections, buf2.as_mut_slice()).unwrap();
         buf1 == buf2
+    }
+
+    #[quickcheck]
+    #[cfg(target_arch = "aarch64")]
+    #[cfg(target_feature = "neon")]
+    fn write_block_info_neon_matches_fallback(data: ChunkColumn) -> bool {
+        let mut buf1 = create_output_buf!();
+        let mut buf2 = create_output_buf!();
+        unsafe { write_block_info_neon(&data.sections, buf1.as_mut_slice()).unwrap(); }
+        write_block_info_fallback(&data.sections, buf2.as_mut_slice()).unwrap();
+        &buf1 == &buf2
     }
 }
