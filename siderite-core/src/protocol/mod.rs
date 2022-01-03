@@ -462,8 +462,7 @@ impl Protocol {
     // HandShaking packets:
 
     fn handle_handshake(&mut self, mut rbuf: &[u8]) {
-        let proto_v = rbuf.read_var_int().unwrap();
-        assert_eq!(proto_v, 47);
+        let _proto_v = rbuf.read_var_int().unwrap();
         let _server_address = rbuf.read_string().unwrap();
         let _server_port = rbuf.read_ushort().unwrap();
         let next_state = rbuf.read_var_int().unwrap();
