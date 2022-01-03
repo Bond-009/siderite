@@ -268,25 +268,28 @@ impl Protocol {
                 return; // Not enough data
             }
 
+            debug!("Packet length: {}", length);
+
             let mut rbuf = vec![0u8; length];
             self.received_data.read_exact(&mut rbuf).unwrap();
-            let mut rslice = &rbuf[..];
+            let mut rslice = rbuf.as_slice();
 
             if self.compressed {
                 let data_length = rslice.read_var_int().unwrap();
+                debug!("Data length: {}", length);
                 if data_length != 0 {
                     let mut d = ZlibDecoder::new(rslice);
-                    let mut vec = Vec::new();
-                    d.read_to_end(&mut vec).unwrap();
-                    let mut slice = &vec[..];
+                    let mut vec = vec!(0u8; data_length as usize);
+                    d.read_exact(&mut vec).unwrap();
+                    let mut slice = vec.as_slice();
                     let id = slice.read_var_int().unwrap();
-                    self.handle_packet(&slice, id);
+                    self.handle_packet(slice, id);
                     return;
                 }
             }
 
             let id = rslice.read_var_int().unwrap();
-            self.handle_packet(&rslice, id);
+            self.handle_packet(rslice, id);
         }
     }
 
