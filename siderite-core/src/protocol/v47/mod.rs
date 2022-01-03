@@ -67,6 +67,7 @@ fn write_block_info_fallback<W>(sections: &[Option<Box<Section>>; SECTION_COUNT]
     Ok(())
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "sse2")]
 unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
     where W : Write {
