@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 async-trait = "^0.1"
 bitflags = "^1.3"
-circbuf = "0.2.0"
 crossbeam-channel = "^0.5"
 lazy_static = "^1.4"
 log = "^0.4"
@@ -30,6 +29,9 @@ default-features = false
 
 [dependencies.mcrw]
 git = "https://gitlab.com/siderite/mcrw.git"
+
+[dependencies.bytebuf]
+git = "https://github.com/bond-009/bytebuf.git"
 
 [dev-dependencies]
 array-init = "^2.0"

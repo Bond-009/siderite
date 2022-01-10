@@ -7,7 +7,7 @@ use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-use circbuf::CircBuf;
+use bytebuf::RingBuf;
 use crossbeam_channel::{Receiver};
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -110,7 +110,7 @@ pub struct Protocol {
 
     stream: TcpStream,
     state: State,
-    received_data: CircBuf,
+    received_data: RingBuf,
     compressed: bool,
 
     last_keep_alive: SystemTime,
@@ -136,7 +136,7 @@ impl Protocol {
 
             stream,
             state: State::HandShaking,
-            received_data: CircBuf::with_capacity(32 * 1024).unwrap(),
+            received_data: RingBuf::with_capacity((32 * 1024) - 1),
             compressed: false,
 
             last_keep_alive: SystemTime::now(),
@@ -250,17 +250,19 @@ impl Protocol {
     }
 
     fn handle_in_packets(&mut self) {
+        let mut buf = [0u8; mcrw::VAR_INT_MAX_SIZE];
         while self.state != State::Disconnected {
-            if self.received_data.is_empty() {
-                // No data
-                return;
-            }
-
-            let length = match self.received_data.read_var_int() {
-                Ok(value) => value as usize,
-                Err(_) => {
-                    debug!("Not enough data");
+            let length = match self.received_data.peek(&mut buf) {
+                Ok(0) | Err(_) => {
                     return; // Not enough data
+                }
+                Ok(read) => {
+                    match (&buf[..read]).read_var_int() {
+                        Ok(v) => v as usize,
+                        Err(_) => {
+                            return; // Not enough data
+                        }
+                    }
                 }
             };
 
@@ -268,10 +270,13 @@ impl Protocol {
                 return; // Not enough data
             }
 
+            self.received_data.advance_read_pos(mcrw::var_int_size(length as i32)).unwrap();
+
             debug!("Packet length: {}", length);
 
             let mut rbuf = vec![0u8; length];
-            self.received_data.read_exact(&mut rbuf).unwrap();
+            let read = self.received_data.read(&mut rbuf).unwrap();
+            debug_assert_eq!(read, length);
             let mut rslice = rbuf.as_slice();
 
             if self.compressed {
@@ -927,7 +932,7 @@ impl Protocol {
         wbuf.write_int(0).unwrap(); // The player's Entity ID
         {
             let p = player.read().unwrap();
-            wbuf.write_ubyte(p.gm() as u8).unwrap(); // Gamemode
+            wbuf.write_ubyte(p.gamemode() as u8).unwrap(); // Gamemode
         }
         {
             let w = world.read().unwrap();
@@ -1074,7 +1079,7 @@ impl Protocol {
         }
         {
             let player = player.read().unwrap();
-            wbuf.write_var_int(player.gm() as i32).unwrap(); // Gamemode
+            wbuf.write_var_int(player.gamemode() as i32).unwrap(); // Gamemode
         }
 
         // TODO: calculate actual ping
@@ -1194,6 +1199,7 @@ impl Protocol {
         e == ErrorKind::NotConnected
             || e == ErrorKind::ConnectionAborted
             || e == ErrorKind::ConnectionRefused
+            || e == ErrorKind::ConnectionReset
             || e == ErrorKind::BrokenPipe
     }
 }

@@ -44,7 +44,7 @@ pub struct Player {
     world: Arc<RwLock<World>>,
 
     health: f32,
-    gm: GameMode,
+    gamemode: GameMode,
     is_flying: bool,
     may_fly: bool,
     pos: Coord<f64>
@@ -61,7 +61,7 @@ impl Player {
             client,
             world,
 
-            gm: gamemode,
+            gamemode,
             health: DEFAULT_HEATH,
             is_flying: false,
             may_fly: gamemode == GameMode::Creative || gamemode == GameMode::Spectator,
@@ -70,8 +70,8 @@ impl Player {
     }
 
     /// Returns the current gamemode of the player.
-    pub fn gm(&self) -> GameMode {
-        self.gm
+    pub fn gamemode(&self) -> GameMode {
+        self.gamemode
     }
 
     pub fn world(&self) -> Arc<RwLock<World>> {
@@ -88,7 +88,7 @@ impl Player {
 
     pub fn abilities(&self) -> Abilities {
         let mut abilities = Abilities::default();
-        if self.gm == GameMode::Creative {
+        if self.gamemode == GameMode::Creative {
             abilities |= Abilities::INVULNERABLE | Abilities::CREATIVE;
         }
 

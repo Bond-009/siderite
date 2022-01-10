@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use async_trait::async_trait;
 use mojang::MojangClient;
 use uuid::Uuid;
@@ -15,7 +17,6 @@ impl MojangAuthenticator {
         }
     }
 }
-
 
 #[async_trait]
 impl Authenticator for MojangAuthenticator {

@@ -1,6 +1,7 @@
-use std::io::Read;
-use std::fs::File;
+#![forbid(unsafe_code)]
+
 use std::error::Error;
+use std::fs;
 use std::result::Result;
 use std::sync::Arc;
 
@@ -18,12 +19,9 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
 
     info!("Starting siderite version {}", VERSION);
-    let favicon: String = match File::open(FAVICON_FILENAME) {
-        Ok(mut v) => {
-            let mut bytes = Vec::new();
-            v.read_to_end(&mut bytes)?;
-            base64::encode(&bytes)
-        },
+
+    let favicon: String = match fs::read(FAVICON_FILENAME) {
+        Ok(v) => base64::encode(&v),
         Err(e) => {
             warn!("Error opening favicon file '{}': {}", FAVICON_FILENAME, e);
             String::new()
