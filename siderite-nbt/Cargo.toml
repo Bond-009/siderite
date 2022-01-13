@@ -1,0 +1,9 @@
+[package]
+name = "siderite-nbt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mcrw = "0.4.0"
+num-derive = "^0.3"
+num-traits = "^0.2"
