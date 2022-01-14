@@ -498,11 +498,10 @@ impl Protocol {
                 ]
             },
             "description": {
-                "text": self.server.description(),
+                "text": self.server.motd(),
             },
         });
-        let favicon = self.server.favicon();
-        if !favicon.is_empty()
+        if let Some(favicon) = self.server.favicon()
         {
             response.as_object_mut().unwrap().insert(
                 "favicon".to_owned(),
