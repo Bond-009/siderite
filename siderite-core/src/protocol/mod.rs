@@ -758,7 +758,6 @@ impl Protocol {
             DigStatus::from_i8(status).unwrap());
     }
 
-
     /// Sent when the player changes the slot selection
     fn handle_player_block_placement(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
@@ -936,11 +935,10 @@ impl Protocol {
         {
             let w = world.read().unwrap();
             wbuf.write_byte(w.dimension() as i8).unwrap(); // Dimension
-            wbuf.write_ubyte(w.difficulty() as u8).unwrap(); // Difficulty
         }
-        let max_players = self.server.max_players();
 
-        wbuf.write_ubyte(max_players as u8).unwrap(); // Max players
+        wbuf.write_ubyte(self.server.difficulty() as u8).unwrap(); // Difficulty
+        wbuf.write_ubyte(self.server.max_players() as u8).unwrap(); // Max players
         wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
         wbuf.write_bool(false).unwrap(); // Reduced debug info?
 

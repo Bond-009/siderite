@@ -27,6 +27,7 @@ pub fn get_next_entity_id() -> u32 {
 pub struct ServerConfig {
     pub view_distance: u8,
     pub motd: String,
+    pub difficulty: Difficulty,
     pub compression_threshold: Option<i32>,
     pub max_players: i32,
     pub encryption: bool
@@ -41,6 +42,7 @@ pub struct Server {
     clients: RwLock<HashMap<u32, Arc<RwLock<Client>>>>,
 
     motd: String,
+    difficulty: Difficulty,
     compression_threshold: Option<i32>,
     max_players: i32,
     favicon: Option<String>,
@@ -57,6 +59,10 @@ impl Server {
 
     pub fn motd(&self) -> &str {
         &self.motd
+    }
+
+    pub fn difficulty(&self) -> Difficulty {
+        self.difficulty
     }
 
     pub fn compression_threshold(&self) -> Option<i32> {
@@ -98,6 +104,7 @@ impl Server {
             clients: RwLock::new(HashMap::new()),
 
             motd: config.motd,
+            difficulty: config.difficulty,
             compression_threshold: config.compression_threshold,
             max_players: config.max_players,
             encryption: config.encryption,
@@ -147,7 +154,6 @@ impl Server {
         self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
             name: "world".to_owned(),
             dimension: Dimension::Overworld,
-            difficulty: Difficulty::Normal,
             default_gamemode: GameMode::Creative,
             random_seed: 0,
             generator_name: "default".into(),

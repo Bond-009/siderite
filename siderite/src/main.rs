@@ -24,7 +24,7 @@ struct ServerProperties {
     view_distance: u8,
     max_building_height: u16,
     server_ip: Option<IpAddr>,
-    level_seed: Option<i64>,
+    level_seed: Option<String>,
     gamemode: GameMode,
     server_port: u16,
     enable_command_block: bool,
@@ -50,7 +50,7 @@ struct ServerProperties {
     network_compression_threshold: i32,
     level_type: String,
     spawn_monsters: bool,
-    max_tick_time: i32,
+    max_tick_time: i64,
     max_players: i32,
     use_native_transport: bool,
     spawn_protection: i32,
@@ -116,6 +116,7 @@ impl From<ServerProperties> for ServerConfig {
         ServerConfig {
             view_distance: properties.view_distance,
             motd: properties.motd,
+            difficulty: properties.difficulty,
             compression_threshold,
             max_players: properties.max_players,
             encryption: properties.online_mode

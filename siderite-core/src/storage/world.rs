@@ -26,7 +26,6 @@ pub enum Difficulty {
 pub struct WorldConfig {
     pub name: String,
     pub dimension: Dimension,
-    pub difficulty: Difficulty,
     pub default_gamemode: GameMode,
     pub random_seed: i64,
     pub generator_name: String,
@@ -36,7 +35,6 @@ pub struct WorldConfig {
 pub struct World {
     _name: String,
     dimension: Dimension,
-    difficulty: Difficulty,
 
     players: Vec<Player>,
     chunk_map: Arc<ChunkMap>,
@@ -50,7 +48,6 @@ impl World {
         Self {
             _name: config.name,
             dimension: config.dimension,
-            difficulty: config.difficulty,
             default_gamemode: config.default_gamemode,
             spawn_pos: config.spawn_pos,
 
@@ -61,10 +58,6 @@ impl World {
 
     pub fn dimension(&self) -> Dimension {
         self.dimension
-    }
-
-    pub fn difficulty(&self) -> Difficulty {
-        self.difficulty
     }
 
     pub fn num_players(&self) -> usize {
