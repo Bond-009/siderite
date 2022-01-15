@@ -121,7 +121,7 @@ impl Protocol {
 
     pub fn new(server: Arc<Server>, stream: TcpStream) -> Self {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
-        thread_rng().fill(&mut arr[..]);
+        thread_rng().fill(arr.as_mut_slice());
         let (tx, rx) = crossbeam_channel::unbounded();
         // The player will get the same ID as the client
         let client_id = server::get_next_entity_id();
@@ -1088,40 +1088,7 @@ impl Protocol {
 
         self.write_packet(&wbuf)
     }
-/*
-    void cProtocol_1_8_0::SendPlayerListAddPlayer(const cPlayer & a_Player)
-{
-	ASSERT(m_State == 3);  // In game mode?
 
-	cPacketizer Pkt(*this, 0x38);  // Playerlist Item packet
-	Pkt.WriteVarInt32(0);
-	Pkt.WriteVarInt32(1);
-	Pkt.WriteUUID(a_Player.GetUUID());
-	Pkt.WriteString(a_Player.GetPlayerListName());
-
-	const Json::Value & Properties = a_Player.GetClientHandle()->GetProperties();
-	Pkt.WriteVarInt32(Properties.size());
-	for (auto & Node : Properties)
-	{
-		Pkt.WriteString(Node.get("name", "").asString());
-		Pkt.WriteString(Node.get("value", "").asString());
-		AString Signature = Node.get("signature", "").asString();
-		if (Signature.empty())
-		{
-			Pkt.WriteBool(false);
-		}
-		else
-		{
-			Pkt.WriteBool(true);
-			Pkt.WriteString(Signature);
-		}
-	}
-
-	Pkt.WriteVarInt32(static_cast<UInt32>(a_Player.GetEffectiveGameMode()));
-	Pkt.WriteVarInt32(static_cast<UInt32>(a_Player.GetClientHandle()->GetPing()));
-	Pkt.WriteBool(false);
-}
-*/
     fn player_abilities(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
