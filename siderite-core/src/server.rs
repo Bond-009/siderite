@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use std::net::{SocketAddr, TcpListener};
 use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::auth::*;
 use crate::client::Client;
+use crate::coord::Coord;
 use crate::entities::player::{GameMode, Player};
 use crate::protocol::Protocol;
 use crate::protocol::thread::ProtocolThread;
@@ -24,11 +25,11 @@ pub fn get_next_entity_id() -> u32 {
 }
 
 pub struct ServerConfig {
-    pub port: u16,
-    pub description: String,
+    pub view_distance: u8,
+    pub motd: String,
+    pub compression_threshold: Option<i32>,
     pub max_players: i32,
-    pub encryption: bool,
-    pub favicon: String,
+    pub encryption: bool
 }
 
 pub struct Server {
@@ -39,11 +40,11 @@ pub struct Server {
     // Clients that aren't assigned a world yet
     clients: RwLock<HashMap<u32, Arc<RwLock<Client>>>>,
 
-    description: String,
+    motd: String,
+    compression_threshold: Option<i32>,
     max_players: i32,
-    favicon: String,
+    favicon: Option<String>,
 
-    port: u16,
     encryption: bool,
 
     pub authenticator: Sender<AuthInfo>,
@@ -54,16 +55,20 @@ pub struct Server {
 
 impl Server {
 
-    pub fn description(&self) -> &str {
-        &self.description
+    pub fn motd(&self) -> &str {
+        &self.motd
+    }
+
+    pub fn compression_threshold(&self) -> Option<i32> {
+        self.compression_threshold
     }
 
     pub fn max_players(&self) -> i32 {
         self.max_players
     }
 
-    pub fn favicon(&self) -> &str {
-        &self.favicon
+    pub fn favicon(&self) -> Option<&str> {
+        self.favicon.as_deref()
     }
 
     pub fn encryption(&self) -> bool {
@@ -82,7 +87,7 @@ impl Server {
         &self.public_key_der
     }
 
-    pub fn new(config: ServerConfig, authenticator: Sender<AuthInfo>) -> Server {
+    pub fn new(config: ServerConfig, favicon: Option<String>, authenticator: Sender<AuthInfo>) -> Server {
         let rsa = Rsa::generate(1024).unwrap();
         Server {
             // MC Update (1.7.x): The server ID is now sent as an empty string.
@@ -92,12 +97,12 @@ impl Server {
             worlds: Vec::new(),
             clients: RwLock::new(HashMap::new()),
 
-            description: config.description,
+            motd: config.motd,
+            compression_threshold: config.compression_threshold,
             max_players: config.max_players,
             encryption: config.encryption,
-            favicon: config.favicon,
 
-            port: config.port,
+            favicon,
 
             authenticator,
 
@@ -106,15 +111,12 @@ impl Server {
         }
     }
 
-    pub fn start(svr: Arc<Server>) {
-        info!("Starting siderite on *:{}", svr.port);
+    pub fn start(svr: Arc<Server>, address: SocketAddr) {
+        info!("Starting siderite on {}", address);
 
         let ps = ProtocolThread::start();
 
-        let listener = TcpListener::bind(
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), svr.port)
-            ).unwrap();
-
+        let listener = TcpListener::bind(address).unwrap();
         for connection in listener.incoming() {
             let mut stream = connection.unwrap();
             if Protocol::legacy_ping(&mut stream) {
@@ -143,10 +145,13 @@ impl Server {
     pub fn load_worlds(&mut self) {
         // TODO: change
         self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
-            name: "Default".to_owned(),
+            name: "world".to_owned(),
             dimension: Dimension::Overworld,
             difficulty: Difficulty::Normal,
-            default_gamemode: GameMode::Creative
+            default_gamemode: GameMode::Creative,
+            random_seed: 0,
+            generator_name: "default".into(),
+            spawn_pos: Coord::<i32>::new(0, 65, 0)
         }))));
     }
 
@@ -203,9 +208,9 @@ impl Server {
         let world = self.default_world();
         let (gm, spawn) = {
             let w = world.read().unwrap();
-            (w.default_gm(), w.spawn_pos())
+            (w.default_gamemode(), w.spawn_pos())
         };
-        let player = Player::new(client_arc2, world, gm, spawn);
+        let player = Player::new(client_arc2, world, gm, spawn.into());
         client.finish_auth(Arc::new(RwLock::new(player)));
     }
 

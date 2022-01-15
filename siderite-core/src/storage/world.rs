@@ -27,7 +27,10 @@ pub struct WorldConfig {
     pub name: String,
     pub dimension: Dimension,
     pub difficulty: Difficulty,
-    pub default_gamemode: GameMode
+    pub default_gamemode: GameMode,
+    pub random_seed: i64,
+    pub generator_name: String,
+    pub spawn_pos: Coord<i32>
 }
 
 pub struct World {
@@ -38,8 +41,8 @@ pub struct World {
     players: Vec<Player>,
     chunk_map: Arc<ChunkMap>,
 
-    default_gm: GameMode,
-    spawn_pos: Coord<f64>
+    default_gamemode: GameMode,
+    spawn_pos: Coord<i32>
 }
 
 impl World {
@@ -48,12 +51,11 @@ impl World {
             _name: config.name,
             dimension: config.dimension,
             difficulty: config.difficulty,
+            default_gamemode: config.default_gamemode,
+            spawn_pos: config.spawn_pos,
 
             players: Vec::new(),
-            chunk_map: Arc::new(ChunkMap::new()),
-
-            default_gm: config.default_gamemode,
-            spawn_pos: Coord::new(0.0, 0.0, 0.0)
+            chunk_map: Arc::new(ChunkMap::new())
         }
     }
 
@@ -74,12 +76,12 @@ impl World {
     }
 
     /// Returns the default gamemode for this world
-    pub fn default_gm(&self) -> GameMode {
-        self.default_gm
+    pub fn default_gamemode(&self) -> GameMode {
+        self.default_gamemode
     }
 
     /// Returns the default spawn position for this world
-    pub fn spawn_pos(&self) -> Coord<f64> {
+    pub fn spawn_pos(&self) -> Coord<i32> {
         self.spawn_pos
     }
 }

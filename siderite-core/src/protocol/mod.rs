@@ -36,9 +36,6 @@ use crate::storage::chunk::chunk_map::ChunkMap;
 
 use self::packets::Packet;
 
-/// Maximum size of a packet before its compressed
-const COMPRESSION_THRESHOLD: i32 = 256;
-
 /// The length of the verify token
 const VERIFY_TOKEN_LEN: usize = 4;
 
@@ -417,25 +414,26 @@ impl Protocol {
 
     fn write_packet(&mut self, rbuf: &[u8]) -> Result<()> {
         let length = rbuf.len() as i32;
-        // debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, length, rbuf[0]);
+        debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, length, rbuf[0]);
 
+        // REVIEW: duplicate code + multiple writes to self.stream
         match &mut self.crypter {
             Some((en, _)) => {
                 let mut buf = vec!(0; rbuf.len() + 10);
                 if !self.compressed {
                     buf.write_var_int(length)?; // Write packet length
                     buf.write_all(&rbuf)?; // Write packet data
-                } else if length > COMPRESSION_THRESHOLD {
+                } else if length < self.server.compression_threshold().unwrap() {
+                    buf.write_var_int(length + 1)?; // Write packet length
+                    buf.write_var_int(0)?;
+                    buf.write_all(&rbuf)?;
+                } else {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
                     buf.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
                     buf.write_var_int(length)?;
                     buf.write_all(&comp_buf)?;
-                } else {
-                    buf.write_var_int(length + 1)?; // Write packet length
-                    buf.write_var_int(0)?;
-                    buf.write_all(&rbuf)?;
                 }
 
                 let mut enc_buf = vec![0; buf.len() + 128];
@@ -446,17 +444,17 @@ impl Protocol {
                 if !self.compressed {
                     self.stream.write_var_int(length)?; // Write packet length
                     self.stream.write_all(&rbuf)?; // Write packet data
-                } else if length > COMPRESSION_THRESHOLD {
+                } else if length < self.server.compression_threshold().unwrap() {
+                    self.stream.write_var_int(length + 1)?; // Write packet length
+                    self.stream.write_var_int(0)?;
+                    self.stream.write_all(&rbuf)?;
+                } else {
                     let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
                     self.stream.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
                     self.stream.write_var_int(length)?;
                     self.stream.write_all(&comp_buf)?;
-                } else {
-                    self.stream.write_var_int(length + 1)?; // Write packet length
-                    self.stream.write_var_int(0)?;
-                    self.stream.write_all(&rbuf)?;
                 }
             }
         }
@@ -498,11 +496,10 @@ impl Protocol {
                 ]
             },
             "description": {
-                "text": self.server.description(),
+                "text": self.server.motd(),
             },
         });
-        let favicon = self.server.favicon();
-        if !favicon.is_empty()
+        if let Some(favicon) = self.server.favicon()
         {
             response.as_object_mut().unwrap().insert(
                 "favicon".to_owned(),
@@ -623,7 +620,9 @@ impl Protocol {
         debug_assert_eq!(self.state, State::Login);
 
         // Enable compression
-        self.set_compression(COMPRESSION_THRESHOLD as i32)?;
+        if let Some(compression_threshold) = self.server.compression_threshold() {
+            self.set_compression(compression_threshold)?;
+        }
 
         self.state = State::Play;
         debug!("Changed State to {:?}", self.state);
