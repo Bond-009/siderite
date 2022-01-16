@@ -27,7 +27,7 @@ use crate::auth;
 use crate::blocks::BlockFace;
 use crate::coord::{ChunkCoord, Coord};
 use crate::client::Client;
-use crate::entities::player::Player;
+use crate::entities::player::{Abilities, Player};
 use crate::server;
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
@@ -350,6 +350,7 @@ impl Protocol {
                     0x0A => (), // Sent when the player's arm swings
                     0x0B => self.handle_entity_action(rbuf),
                     0x0D => self.handle_close_window(rbuf),
+                    0x0E => self.handle_click_window(rbuf),
                     0x10 => self.handle_creative_inventory_action(rbuf),
                     0x13 => self.handle_player_abilities(rbuf),
                     0x15 => self.handle_client_settings(rbuf),
@@ -389,21 +390,21 @@ impl Protocol {
 
     fn send_packet(&mut self, packet: Packet) {
         let res = match packet {
-            Packet::LoginSuccess()                      => self.login_success(),
+            Packet::LoginSuccess() => self.login_success(),
 
-            Packet::ChatMessage(raw_message)            => self.chat_message(raw_message),
-            Packet::JoinGame(player, world)             => self.join_game(player, world),
-            Packet::TimeUpdate(world)                   => self.time_update(world),
-            Packet::SpawnPosition(world)                => self.spawn_position(world),
-            Packet::PlayerPositionAndLook(player)       => self.player_pos_look(player),
-            Packet::ChangeGameState(reason, value)      => self.change_game_state(reason, value),
-            Packet::PlayerListAddPlayer(client, player) => self.player_list_add_player(client, player),
-            Packet::PlayerAbilities(player)             => self.player_abilities(player),
-            Packet::ChunkData(coord, chunk_map)         => self.chunk_data(coord, chunk_map),
-            Packet::ServerDifficulty(difficulty)        => self.server_difficulty(difficulty),
-            Packet::ResourcePackSend(url, hash)         => self.resource_pack_send(&url, &hash),
+            Packet::ChatMessage(raw_message) => self.chat_message(raw_message),
+            Packet::JoinGame(player, world) => self.join_game(player, world),
+            Packet::TimeUpdate(world) => self.time_update(world),
+            Packet::SpawnPosition(world) => self.spawn_position(world),
+            Packet::PlayerPositionAndLook(player) => self.player_pos_look(player),
+            Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
+            Packet::PlayerListAddPlayer(player) => self.player_list_add_player(player),
+            Packet::PlayerAbilities(player) => self.player_abilities(player),
+            Packet::ChunkData(coord, chunk_map) => self.chunk_data(coord, chunk_map),
+            Packet::ServerDifficulty(difficulty) => self.server_difficulty(difficulty),
+            Packet::ResourcePackSend(url, hash) => self.resource_pack_send(&url, &hash),
 
-            Packet::Disconnect(reason)                  => self.disconnect(&reason)
+            Packet::Disconnect(reason) => self.disconnect(&reason)
         };
 
         if res.is_err() {
@@ -810,7 +811,19 @@ impl Protocol {
     fn handle_close_window(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
 
-        let _window_id = rbuf.read_ubyte().unwrap();
+        let _window_id = rbuf.read_ubyte().unwrap(); // Window ID
+    }
+
+    /// This packet is sent by the player when it clicks on a slot in a window.
+    fn handle_click_window(&mut self, mut rbuf: &[u8]) {
+        debug_assert_eq!(self.state, State::Play);
+
+        let _window_id = rbuf.read_ubyte().unwrap(); // Window ID
+        let _slot = rbuf.read_short().unwrap(); // Slot
+        let _button = rbuf.read_byte().unwrap(); // Button
+        let _action = rbuf.read_short().unwrap(); // Action Number
+        let _mode = rbuf.read_ubyte().unwrap(); // Inventory operation mode
+        // TODO: Read slot
     }
 
     /// While the user is in the standard inventory (i.e., not a crafting bench) in Creative mode,
@@ -829,17 +842,7 @@ impl Protocol {
     fn handle_player_abilities(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
 
-        // Bit  | Meaning
-        // --------------------
-        // 0x01 | is Creative
-        // 0x02 | is flying
-        // 0x04 | can fly
-        // 0x08 | damage disabled (god mode)
-        let flags = rbuf.read_byte().unwrap();
-        let _is_creative = (flags & 0x01) == 0x01;
-        let _is_flying = (flags & 0x02) == 0x02;
-        let _can_fly = (flags & 0x04) == 0x04;
-        let _god_mode = (flags & 0x08) == 0x08;
+        let _abilities = Abilities::from_bits(rbuf.read_ubyte().unwrap());
         let _flying_speed = rbuf.read_float().unwrap();
         let _walking_speed = rbuf.read_float().unwrap();
     }
@@ -971,31 +974,34 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
-    fn spawn_position(&mut self, _world: Arc<RwLock<World>>) -> Result<()> {
+    fn spawn_position(&mut self, world: Arc<RwLock<World>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x05).unwrap(); // Spawn Position packet
 
-        // TODO: Write world spawn
-        wbuf.write_position(10, 65, 10).unwrap(); // Spawn location
+        let spawn_pos = world.read().unwrap().spawn_pos();
+        wbuf.write_position(spawn_pos.x, spawn_pos.y, spawn_pos.z).unwrap(); // Spawn location
 
         self.write_packet(&wbuf)
     }
 
-    fn player_pos_look(&mut self, _player: Arc<RwLock<Player>>) -> Result<()> {
+    fn player_pos_look(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x08).unwrap(); // Player Position And Look packet
 
-        // TODO: write actual values
-        wbuf.write_double(10.0).unwrap(); // X
-        wbuf.write_double(65.0).unwrap(); // y
-        wbuf.write_double(10.0).unwrap(); // z
-        wbuf.write_float(10.0).unwrap(); // Yaw
-        wbuf.write_float(0.0).unwrap(); // Pitch
-        wbuf.write_byte(0).unwrap(); // Flags
+        {
+            let p = player.read().unwrap();
+            let pos = p.pos();
+            wbuf.write_double(pos.x).unwrap(); // X
+            wbuf.write_double(pos.y).unwrap(); // y
+            wbuf.write_double(pos.z).unwrap(); // z
+            wbuf.write_float(p.yaw()).unwrap(); // Yaw
+            wbuf.write_float(p.pitch()).unwrap(); // Pitch
+            wbuf.write_byte(0).unwrap(); // Flags
+        }
 
         self.write_packet(&wbuf)
     }
@@ -1042,7 +1048,7 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
-    fn player_list_add_player(&mut self, client: Arc<RwLock<Client>>, player: Arc<RwLock<Player>>, ) -> Result<()> {
+    fn player_list_add_player(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
@@ -1052,7 +1058,9 @@ impl Protocol {
         wbuf.write_var_int(1).unwrap(); // Number Of Players
 
         {
-            let client = client.read().unwrap();
+            let p = player.read().unwrap();
+            let client_lock = p.client();
+            let client = client_lock.read().unwrap();
             wbuf.write_all(client.uuid().as_bytes()).unwrap(); // UUID
             wbuf.write_string(client.get_username().unwrap()).unwrap();
             if let Some(properties) = client.properties().as_array()
@@ -1073,16 +1081,14 @@ impl Protocol {
             else {
                 wbuf.write_var_int(0).unwrap();
             }
-        }
-        {
-            let player = player.read().unwrap();
-            wbuf.write_var_int(player.gamemode() as i32).unwrap(); // Gamemode
+
+            wbuf.write_var_int(p.gamemode() as i32).unwrap(); // Gamemode
         }
 
         // TODO: calculate actual ping
         wbuf.write_var_int(250).unwrap(); // Ping
 
-        wbuf.write_bool(false).unwrap(); //  Has Display Name
+        wbuf.write_bool(false).unwrap(); // Has Display Name
 
         self.write_packet(&wbuf)
     }

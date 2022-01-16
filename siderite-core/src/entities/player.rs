@@ -47,7 +47,9 @@ pub struct Player {
     gamemode: GameMode,
     is_flying: bool,
     may_fly: bool,
-    pos: Coord<f64>
+    pos: Coord<f64>,
+    yaw: f32,
+    pitch: f32
 }
 
 impl Player {
@@ -65,7 +67,9 @@ impl Player {
             health: DEFAULT_HEATH,
             is_flying: false,
             may_fly: gamemode == GameMode::Creative || gamemode == GameMode::Spectator,
-            pos
+            pos,
+            yaw: 0f32,
+            pitch: 0f32
         }
     }
 
@@ -105,5 +109,13 @@ impl Player {
 
     pub fn pos(&self) -> Coord<f64> {
         self.pos
+    }
+
+    pub fn yaw(&self) -> f32 {
+        self.yaw
+    }
+
+    pub fn pitch(&self) -> f32 {
+        self.pitch
     }
 }

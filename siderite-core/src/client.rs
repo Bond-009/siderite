@@ -11,7 +11,6 @@ use crate::protocol::DigStatus;
 use crate::protocol::packets::Packet;
 use crate::server::Server;
 use crate::coord::{ChunkCoord, Coord};
-use crate::storage::world::Difficulty;
 
 pub struct Client {
     id: u32,
@@ -98,7 +97,7 @@ impl Client {
 
         self.protocol.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
         self.protocol.send(Packet::SpawnPosition(world.clone())).unwrap();
-        self.protocol.send(Packet::ServerDifficulty(Difficulty::Normal)).unwrap();
+        self.protocol.send(Packet::ServerDifficulty(self.server.difficulty())).unwrap();
         self.protocol.send(Packet::PlayerAbilities(player.clone())).unwrap();
 
         for x in -3..3 {
@@ -115,10 +114,7 @@ impl Client {
 
         self.protocol.send(Packet::TimeUpdate(world)).unwrap();
         self.protocol.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
-        self.protocol.send(
-            Packet::PlayerListAddPlayer(
-                self.server.get_client(self.id).unwrap(),
-                player)).unwrap();
+        self.protocol.send(Packet::PlayerListAddPlayer(player)).unwrap();
     }
 
     pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {

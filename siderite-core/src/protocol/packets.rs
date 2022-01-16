@@ -1,6 +1,5 @@
 use std::sync::{Arc, RwLock};
 
-use crate::client::Client;
 use crate::coord::ChunkCoord;
 use crate::entities::player::Player;
 use crate::protocol::GameStateReason;
@@ -24,7 +23,7 @@ pub enum Packet {
     /// Player
     PlayerPositionAndLook(Arc<RwLock<Player>>),
     /// Player
-    PlayerListAddPlayer(Arc<RwLock<Client>>, Arc<RwLock<Player>>),
+    PlayerListAddPlayer(Arc<RwLock<Player>>),
     /// Player
     PlayerAbilities(Arc<RwLock<Player>>),
     /// Primary Bit Mask, Chunk Data
