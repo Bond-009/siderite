@@ -3,7 +3,7 @@ use std::sync::Arc;
 use num_derive::FromPrimitive;
 
 use crate::coord::Coord;
-use crate::entities::player::{GameMode, Player};
+use crate::entities::player::Player;
 use crate::storage::chunk::chunk_map::ChunkMap;
 
 #[repr(i8)]
@@ -26,9 +26,6 @@ pub enum Difficulty {
 pub struct WorldConfig {
     pub name: String,
     pub dimension: Dimension,
-    pub default_gamemode: GameMode,
-    pub random_seed: i64,
-    pub generator_name: String,
     pub spawn_pos: Coord<i32>
 }
 
@@ -39,7 +36,6 @@ pub struct World {
     players: Vec<Player>,
     chunk_map: Arc<ChunkMap>,
 
-    default_gamemode: GameMode,
     spawn_pos: Coord<i32>
 }
 
@@ -48,7 +44,6 @@ impl World {
         Self {
             _name: config.name,
             dimension: config.dimension,
-            default_gamemode: config.default_gamemode,
             spawn_pos: config.spawn_pos,
 
             players: Vec::new(),
@@ -66,11 +61,6 @@ impl World {
 
     pub fn chunk_map(&self) -> Arc<ChunkMap> {
         self.chunk_map.clone()
-    }
-
-    /// Returns the default gamemode for this world
-    pub fn default_gamemode(&self) -> GameMode {
-        self.default_gamemode
     }
 
     /// Returns the default spawn position for this world

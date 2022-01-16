@@ -115,9 +115,12 @@ impl From<ServerProperties> for ServerConfig {
 
         ServerConfig {
             view_distance: properties.view_distance,
+            default_gamemode: properties.gamemode,
+            level_name: properties.level_name,
             motd: properties.motd,
             difficulty: properties.difficulty,
             compression_threshold,
+            level_type: properties.level_type,
             max_players: properties.max_players,
             encryption: properties.online_mode
         }
@@ -156,20 +159,20 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
 
     server.load_worlds();
 
-    let server_ref = Arc::new(server);
-    let server_ref2 = server_ref.clone();
+    let server = Arc::new(server);
+    let server_ref = server.clone();
 
     let authenticator = get_authenticator("mojang");
     task::spawn(async move {
         for m in rx.iter() {
             match authenticator.authenticate(m).await {
-                Ok(o) => server_ref2.auth_user(o.client_id, o.username, o.uuid, o.properties),
+                Ok(o) => server_ref.auth_user(o.client_id, o.username, o.uuid, o.properties),
                 Err(e) => error!("Failed auth with {:?}", e)
             }
         }
     });
 
-    Server::start(server_ref, listen_addr);
+    Server::start(server, listen_addr);
 
     Ok(())
 }

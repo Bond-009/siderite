@@ -939,7 +939,7 @@ impl Protocol {
 
         wbuf.write_ubyte(self.server.difficulty() as u8).unwrap(); // Difficulty
         wbuf.write_ubyte(self.server.max_players() as u8).unwrap(); // Max players
-        wbuf.write_string(&"default").unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
+        wbuf.write_string(self.server.level_type()).unwrap(); // Level Type? (default, flat, largeBiomes, amplified, default_1_1)
         wbuf.write_bool(false).unwrap(); // Reduced debug info?
 
         self.write_packet(&wbuf)

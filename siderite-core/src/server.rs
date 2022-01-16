@@ -26,9 +26,12 @@ pub fn get_next_entity_id() -> u32 {
 
 pub struct ServerConfig {
     pub view_distance: u8,
+    pub default_gamemode: GameMode,
+    pub level_name: String,
     pub motd: String,
     pub difficulty: Difficulty,
     pub compression_threshold: Option<i32>,
+    pub level_type: String,
     pub max_players: i32,
     pub encryption: bool
 }
@@ -41,9 +44,12 @@ pub struct Server {
     // Clients that aren't assigned a world yet
     clients: RwLock<HashMap<u32, Arc<RwLock<Client>>>>,
 
+    default_gamemode: GameMode,
+    level_name: String,
     motd: String,
     difficulty: Difficulty,
     compression_threshold: Option<i32>,
+    level_type: String,
     max_players: i32,
     favicon: Option<String>,
 
@@ -57,6 +63,11 @@ pub struct Server {
 
 impl Server {
 
+    /// Returns the default gamemode.
+    pub fn default_gamemode(&self) -> GameMode {
+        self.default_gamemode
+    }
+
     pub fn motd(&self) -> &str {
         &self.motd
     }
@@ -67,6 +78,10 @@ impl Server {
 
     pub fn compression_threshold(&self) -> Option<i32> {
         self.compression_threshold
+    }
+
+    pub fn level_type(&self) -> &str {
+        &self.level_type
     }
 
     pub fn max_players(&self) -> i32 {
@@ -103,9 +118,12 @@ impl Server {
             worlds: Vec::new(),
             clients: RwLock::new(HashMap::new()),
 
+            default_gamemode: config.default_gamemode,
+            level_name: config.level_name,
             motd: config.motd,
             difficulty: config.difficulty,
             compression_threshold: config.compression_threshold,
+            level_type: config.level_type,
             max_players: config.max_players,
             encryption: config.encryption,
 
@@ -152,11 +170,8 @@ impl Server {
     pub fn load_worlds(&mut self) {
         // TODO: change
         self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
-            name: "world".to_owned(),
+            name: self.level_name.clone(),
             dimension: Dimension::Overworld,
-            default_gamemode: GameMode::Creative,
-            random_seed: 0,
-            generator_name: "default".into(),
             spawn_pos: Coord::<i32>::new(0, 65, 0)
         }))));
     }
@@ -212,11 +227,11 @@ impl Server {
         let mut client = client_arc.write().unwrap();
         client.auth(username, uuid, properties);
         let world = self.default_world();
-        let (gm, spawn) = {
+        let spawn = {
             let w = world.read().unwrap();
-            (w.default_gamemode(), w.spawn_pos())
+            w.spawn_pos()
         };
-        let player = Player::new(client_arc2, world, gm, spawn.into());
+        let player = Player::new(client_arc2, world, self.default_gamemode(), spawn.into());
         client.finish_auth(Arc::new(RwLock::new(player)));
     }
 
