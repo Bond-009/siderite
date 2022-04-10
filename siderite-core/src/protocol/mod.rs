@@ -8,7 +8,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use bytebuf::RingBuf;
-use crossbeam_channel::{Receiver};
+use crossbeam_channel::Receiver;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;

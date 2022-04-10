@@ -128,8 +128,7 @@ impl ChunkColumn {
         }
     }
 
-    // TODO: const
-    fn get_indices_from_rel_pos(rel_pos: Coord<i32>) -> (usize, usize) {
+    const fn get_indices_from_rel_pos(rel_pos: Coord<i32>) -> (usize, usize) {
         assert!(!Chunk::is_valid_rel_pos(rel_pos));
 
         ((rel_pos.y / WIDTH) as usize, (rel_pos.x + rel_pos.z * WIDTH + rel_pos.y * AREA) as usize)

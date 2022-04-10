@@ -120,10 +120,7 @@ pub fn java_hex_digest(mut input: [u8; 20]) -> String {
 fn twos_compliment(arr: &mut [u8; 20]) {
     let mut carry = true;
     for x in arr.iter_mut().rev() {
-        // TODO: https://github.com/rust-lang/rust/issues/71126
-        let (val, tmp_carry) = (!*x).overflowing_add(carry as u8);
-        *x = val;
-        carry = tmp_carry;
+        (*x, carry) = (!*x).overflowing_add(carry as u8);
     }
 }
 
