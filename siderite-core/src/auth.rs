@@ -65,10 +65,7 @@ pub fn generate_offline_uuid(username: &str) -> result::Result<Uuid, ErrorStack>
     let mut b = [0u8; 16];
     b.copy_from_slice(&digest);
 
-    Ok(uuid::Builder::from_bytes(b)
-        .set_version(uuid::Version::Md5)
-        .set_variant(uuid::Variant::RFC4122)
-        .build())
+    Ok(uuid::Builder::from_md5_bytes(b).into_uuid())
 }
 
 // TODO: move

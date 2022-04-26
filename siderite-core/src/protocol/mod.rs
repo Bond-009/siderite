@@ -7,7 +7,7 @@ use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-use bytebuf::RingBuf;
+use bytebufrs::RingBuf;
 use crossbeam_channel::Receiver;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -634,7 +634,7 @@ impl Protocol {
         {
             let client = self.client.read().unwrap();
 
-            let uuid = client.uuid().to_hyphenated().to_string();
+            let uuid = client.uuid().as_hyphenated().to_string();
             let username = client.get_username().unwrap();
             debug!("uuid: {}", uuid);
             debug!("name: {}", username);
