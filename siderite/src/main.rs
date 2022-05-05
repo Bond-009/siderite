@@ -54,6 +54,8 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
+    let online = properties.online_mode;
+
     let listen_addr = SocketAddr::new(
         properties.server_ip.unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
         properties.server_port);
@@ -69,7 +71,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let server = Arc::new(server);
     let server_ref = server.clone();
 
-    let authenticator = get_authenticator("mojang");
+    let authenticator = get_authenticator(if online { "mojang" } else { "offline" });
     task::spawn(async move {
         for m in rx.iter() {
             match authenticator.authenticate(m).await {
