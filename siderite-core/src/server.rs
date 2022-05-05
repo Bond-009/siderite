@@ -15,6 +15,7 @@ use crate::client::Client;
 use crate::coord::Coord;
 use crate::entities::player::{GameMode, Player};
 use crate::protocol::Protocol;
+use crate::protocol::packets::{Packet, PlayerListAction};
 use crate::protocol::thread::ProtocolThread;
 use crate::storage::world::*;
 
@@ -161,10 +162,27 @@ impl Server {
         }
     }
 
-    pub fn remove_client(&self, client_id: u32) {
+    pub fn remove_client(&self, id: u32) {
         let mut clients = self.clients.write().unwrap();
-        clients.remove(&client_id);
-        debug!("Removed client with id: {}", client_id);
+        if clients.remove(&id).is_some() {
+            return;
+        }
+        let mut player = None;
+        for world in &self.worlds {
+            if let Some(v) = world.write().unwrap().remove_player(id) {
+                player = Some(v);
+                break;
+            }
+        }
+
+        if let Some(player) = player {
+            let client = player.read().unwrap().client();
+            let client = client.read().unwrap();
+            let msg = format!("{} left the game", client.get_username().unwrap());
+            info!("{}", msg);
+            self.broadcast(Packet::ChatMessage(msg));
+            self.broadcast(Packet::PlayerListItem(PlayerListAction::RemovePlayer, Box::new([player])));
+        }
     }
 
     pub fn load_worlds(&mut self) {
@@ -190,10 +208,9 @@ impl Server {
         false
     }
 
-    pub fn foreach_client(&self, function: &dyn Fn(&Arc<RwLock<Client>>)) {
-        let clients = self.clients.read().unwrap();
-        for client in clients.values() {
-            function(client);
+    pub fn foreach_player(&self, function: &dyn Fn(&Arc<RwLock<Player>>)) {
+        for world in &self.worlds {
+            world.read().unwrap().foreach_player(function);
         }
     }
 
@@ -224,15 +241,25 @@ impl Server {
 
         let client_arc = self.get_client(client_id).unwrap();
         let client_arc2 = client_arc.clone();
+
         let mut client = client_arc.write().unwrap();
+        let join_message = format!("{} joined the game", username);
         client.auth(username, uuid, properties);
+        // TODO: get correct world for player
         let world = self.default_world();
         let spawn = {
             let w = world.read().unwrap();
             w.spawn_pos()
         };
-        let player = Player::new(client_arc2, world, self.default_gamemode(), spawn.into());
-        client.finish_auth(Arc::new(RwLock::new(player)));
+        let player = Player::new(client_arc2, world.clone(), self.default_gamemode(), spawn.into());
+        let player_arc = Arc::new(RwLock::new(player));
+
+        info!("{}", join_message);
+        self.broadcast(Packet::ChatMessage(join_message));
+        client.finish_auth(player_arc.clone());
+
+        self.remove_client(client_id);
+        world.write().unwrap().add_player(client_id, player_arc);
     }
 
     pub fn kick_user(&self, client_id: u32, reason: &str) {
@@ -245,8 +272,12 @@ impl Server {
     pub fn broadcast_chat(&self, username: &str, msg: &str) {
         let raw_msg = format!("<{}>: {}", username, msg);
         info!("{}", raw_msg);
-        self.foreach_client(&|client: &Arc<RwLock<Client>>| {
-            client.read().unwrap().send_chat(raw_msg.clone());
+        self.broadcast(Packet::ChatMessage(raw_msg));
+    }
+
+    pub fn broadcast(&self, packet: Packet) {
+        self.foreach_player(&|player| {
+            player.read().unwrap().client().read().unwrap().send(packet.clone());
         });
     }
 }

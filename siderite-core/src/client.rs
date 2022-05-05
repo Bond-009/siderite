@@ -8,7 +8,7 @@ use crate::auth::AuthInfo;
 use crate::blocks::BlockFace;
 use crate::entities::player::Player;
 use crate::protocol::DigStatus;
-use crate::protocol::packets::Packet;
+use crate::protocol::packets::{Packet, PlayerListAction};
 use crate::server::Server;
 use crate::coord::{ChunkCoord, Coord};
 
@@ -114,7 +114,11 @@ impl Client {
 
         self.protocol.send(Packet::TimeUpdate(world)).unwrap();
         self.protocol.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
-        self.protocol.send(Packet::PlayerListAddPlayer(player)).unwrap();
+
+        // Add ourself to the tab menu
+        let packet = Packet::PlayerListItem(PlayerListAction::AddPlayer, Box::new([player]));
+        self.protocol.send(packet.clone()).unwrap();
+        self.server.broadcast(packet);
     }
 
     pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {
@@ -128,7 +132,7 @@ impl Client {
         };
     }
 
-    pub fn send_chat(&self, raw_msg: String) {
-        self.protocol.send(Packet::ChatMessage(raw_msg)).unwrap();
+    pub fn send(&self, packet: Packet) {
+        self.protocol.send(packet).unwrap();
     }
 }

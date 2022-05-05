@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use num_derive::FromPrimitive;
 
@@ -33,7 +34,7 @@ pub struct World {
     _name: String,
     dimension: Dimension,
 
-    players: Vec<Player>,
+    players: HashMap<u32, Arc<RwLock<Player>>>,
     chunk_map: Arc<ChunkMap>,
 
     spawn_pos: Coord<i32>
@@ -46,7 +47,7 @@ impl World {
             dimension: config.dimension,
             spawn_pos: config.spawn_pos,
 
-            players: Vec::new(),
+            players: HashMap::new(),
             chunk_map: Arc::new(ChunkMap::new())
         }
     }
@@ -66,5 +67,19 @@ impl World {
     /// Returns the default spawn position for this world
     pub fn spawn_pos(&self) -> Coord<i32> {
         self.spawn_pos
+    }
+
+    pub fn foreach_player(&self, function: &dyn Fn(&Arc<RwLock<Player>>)) {
+        for player in self.players.values() {
+            function(&player);
+        }
+    }
+
+    pub fn add_player(&mut self, id: u32, player: Arc<RwLock<Player>>) {
+        self.players.insert(id, player);
+    }
+
+    pub fn remove_player(&mut self, id: u32) -> Option<Arc<RwLock<Player>>> {
+        self.players.remove(&id)
     }
 }

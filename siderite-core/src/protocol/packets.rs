@@ -6,6 +6,7 @@ use crate::protocol::GameStateReason;
 use crate::storage::chunk::chunk_map::ChunkMap;
 use crate::storage::world::{Difficulty, World};
 
+#[derive(Clone)]
 pub enum Packet {
     // Login state
     ///
@@ -22,13 +23,13 @@ pub enum Packet {
     SpawnPosition(Arc<RwLock<World>>),
     /// Player
     PlayerPositionAndLook(Arc<RwLock<Player>>),
-    /// Player
-    PlayerListAddPlayer(Arc<RwLock<Player>>),
+    /// PlayerListAction, Players
+    PlayerListItem(PlayerListAction, Box<[Arc<RwLock<Player>>]>),
     /// Player
     PlayerAbilities(Arc<RwLock<Player>>),
     /// Primary Bit Mask, Chunk Data
     ChunkData(ChunkCoord, Arc<ChunkMap>),
-    ///
+    /// Difficulty
     ServerDifficulty(Difficulty),
     ///
     ChangeGameState(GameStateReason, f32),
@@ -38,4 +39,14 @@ pub enum Packet {
     // Other
     /// Reason
     Disconnect(String),
+}
+
+#[repr(i32)]
+#[derive(Copy, Clone, Debug)]
+pub enum PlayerListAction {
+    AddPlayer = 0,
+    UpdateGamemode = 1,
+    UpdateLatency = 2,
+    UpdateDisplayName = 3,
+    RemovePlayer = 4
 }

@@ -34,7 +34,7 @@ use crate::storage::world::{Difficulty, World};
 use crate::storage::chunk::{Chunk, SerializeChunk};
 use crate::storage::chunk::chunk_map::ChunkMap;
 
-use self::packets::Packet;
+use self::packets::{Packet, PlayerListAction};
 
 /// The length of the verify token
 const VERIFY_TOKEN_LEN: usize = 4;
@@ -398,7 +398,7 @@ impl Protocol {
             Packet::SpawnPosition(world) => self.spawn_position(world),
             Packet::PlayerPositionAndLook(player) => self.player_pos_look(player),
             Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
-            Packet::PlayerListAddPlayer(player) => self.player_list_add_player(player),
+            Packet::PlayerListItem(action, players) => self.player_list_item(action, players),
             Packet::PlayerAbilities(player) => self.player_abilities(player),
             Packet::ChunkData(coord, chunk_map) => self.chunk_data(coord, chunk_map),
             Packet::ServerDifficulty(difficulty) => self.server_difficulty(difficulty),
@@ -1048,47 +1048,55 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
-    fn player_list_add_player(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
+    fn player_list_item(&mut self, action: PlayerListAction, players: Box<[Arc<RwLock<Player>>]>) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
-        wbuf.write_var_int(0x38).unwrap(); // Player Abilities packet
+        wbuf.write_var_int(0x38).unwrap(); // Player List Item packet
 
-        wbuf.write_var_int(0).unwrap(); // Action: add player
-        wbuf.write_var_int(1).unwrap(); // Number Of Players
+        wbuf.write_var_int(action as i32).unwrap(); // Action
+        wbuf.write_var_int(players.len() as i32).unwrap(); // Number Of Players
 
-        {
-            let p = player.read().unwrap();
-            let client_lock = p.client();
-            let client = client_lock.read().unwrap();
+        for player in players.iter() {
+            let player = player.read().unwrap();
+            let client = player.client();
+            let client = client.read().unwrap();
+
             wbuf.write_all(client.uuid().as_bytes()).unwrap(); // UUID
-            wbuf.write_string(client.get_username().unwrap()).unwrap();
-            if let Some(properties) = client.properties().as_array()
-            {
-                wbuf.write_var_int(properties.len() as i32).unwrap();
-                for prop in properties {
-                    wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
-                    wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
-                    if let Some(s) = prop.get("signature") {
-                        wbuf.write_bool(true).unwrap();
-                        wbuf.write_string(s.as_str().unwrap()).unwrap();
+
+            match action {
+                PlayerListAction::AddPlayer => {
+                    wbuf.write_string(client.get_username().unwrap()).unwrap();
+                    if let Some(properties) = client.properties().as_array()
+                    {
+                        wbuf.write_var_int(properties.len() as i32).unwrap();
+                        for prop in properties {
+                            wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
+                            wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
+                            let signature = prop.get("signature");
+                            wbuf.write_bool(signature.is_some()).unwrap();
+                            if let Some(signature) = signature {
+                                wbuf.write_string(signature.as_str().unwrap()).unwrap();
+                            }
+                        }
                     }
                     else {
-                        wbuf.write_bool(false).unwrap()
+                        wbuf.write_var_int(0).unwrap();
                     }
+
+                    wbuf.write_var_int(player.gamemode() as i32).unwrap(); // Gamemode
+
+                    // TODO: calculate actual ping
+                    wbuf.write_var_int(250).unwrap(); // Ping
+
+                    wbuf.write_bool(false).unwrap(); // Has Display Name
                 }
+                PlayerListAction::UpdateGamemode => wbuf.write_var_int(player.gamemode() as i32).unwrap(), // Gamemode
+                PlayerListAction::UpdateLatency => wbuf.write_var_int(250).unwrap(), // Ping
+                PlayerListAction::UpdateDisplayName => wbuf.write_bool(false).unwrap(), // Has Display Name,
+                PlayerListAction::RemovePlayer => ()
             }
-            else {
-                wbuf.write_var_int(0).unwrap();
-            }
-
-            wbuf.write_var_int(p.gamemode() as i32).unwrap(); // Gamemode
         }
-
-        // TODO: calculate actual ping
-        wbuf.write_var_int(250).unwrap(); // Ping
-
-        wbuf.write_bool(false).unwrap(); // Has Display Name
 
         self.write_packet(&wbuf)
     }
