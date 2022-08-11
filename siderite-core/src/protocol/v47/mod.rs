@@ -115,7 +115,7 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
 
 #[cfg(test)]
 mod tests {
-    use array_init::array_init;
+    use std::array;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
 
@@ -126,10 +126,10 @@ mod tests {
     impl Arbitrary for Section {
         fn arbitrary(g: &mut Gen) -> Section {
             Section {
-                block_types: array_init(|_| u8::arbitrary(g)),
-                block_metas: array_init(|_| u8::arbitrary(g)),
-                block_light: array_init(|_| u8::arbitrary(g)),
-                block_sky_light: array_init(|_| u8::arbitrary(g))
+                block_types: array::from_fn(|_| u8::arbitrary(g)),
+                block_metas: array::from_fn(|_| u8::arbitrary(g)),
+                block_light: array::from_fn(|_| u8::arbitrary(g)),
+                block_sky_light: array::from_fn(|_| u8::arbitrary(g))
             }
         }
     }
@@ -137,7 +137,7 @@ mod tests {
     impl Arbitrary for ChunkColumn {
         fn arbitrary(g: &mut Gen) -> ChunkColumn {
             ChunkColumn {
-                sections: array_init(|_| Option::<Box<Section>>::arbitrary(g))
+                sections: array::from_fn(|_| Option::<Box<Section>>::arbitrary(g))
             }
         }
     }
