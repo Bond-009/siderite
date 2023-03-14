@@ -23,6 +23,8 @@ pub enum Packet {
     SpawnPosition(Arc<RwLock<World>>),
     /// Player
     PlayerPositionAndLook(Arc<RwLock<Player>>),
+    /// Player
+    SpawnPlayer(Arc<RwLock<Player>>),
     /// PlayerListAction, Players
     PlayerListItem(PlayerListAction, Box<[Arc<RwLock<Player>>]>),
     /// Player

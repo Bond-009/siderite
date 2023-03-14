@@ -27,7 +27,7 @@ use crate::auth;
 use crate::blocks::BlockFace;
 use crate::coord::{ChunkCoord, Coord};
 use crate::client::Client;
-use crate::entities::player::{Abilities, Player};
+use crate::entities::player::{Abilities, Player, SkinFlags};
 use crate::server;
 use crate::server::Server;
 use crate::storage::world::{Difficulty, World};
@@ -397,6 +397,7 @@ impl Protocol {
             Packet::TimeUpdate(world) => self.time_update(world),
             Packet::SpawnPosition(world) => self.spawn_position(world),
             Packet::PlayerPositionAndLook(player) => self.player_pos_look(player),
+            Packet::SpawnPlayer(player) => self.spawn_player(player),
             Packet::ChangeGameState(reason, value) => self.change_game_state(reason, value),
             Packet::PlayerListItem(action, players) => self.player_list_item(action, players),
             Packet::PlayerAbilities(player) => self.player_abilities(player),
@@ -842,7 +843,7 @@ impl Protocol {
     fn handle_player_abilities(&mut self, mut rbuf: &[u8]) {
         debug_assert_eq!(self.state, State::Play);
 
-        let _abilities = Abilities::from_bits(rbuf.read_ubyte().unwrap());
+        let _abilities = Abilities::from_bits_truncate(rbuf.read_ubyte().unwrap());
         let _flying_speed = rbuf.read_float().unwrap();
         let _walking_speed = rbuf.read_float().unwrap();
     }
@@ -869,7 +870,7 @@ impl Protocol {
         // 5 (0x20) | Right Pants Leg enabled
         // 6 (0x40) | Hat enabled
         // 7 (0x80) | !Unused
-        let _skin_parts = rbuf.read_ubyte().unwrap();
+        let _skin_parts = SkinFlags::from_bits_truncate(rbuf.read_ubyte().unwrap());
     }
 
     /// Sent when the client is ready to complete login and when the client is ready to respawn after death.
@@ -929,10 +930,13 @@ impl Protocol {
         let mut wbuf = Vec::new();
         wbuf.write_var_int(0x01).unwrap(); // Join Game packet
 
-        // TODO:
-        wbuf.write_int(0).unwrap(); // The player's Entity ID
         {
             let p = player.read().unwrap();
+            {
+                let client_lock = p.client();
+                let c = client_lock.read().unwrap();
+                wbuf.write_int(c.id() as i32).unwrap(); // The player's Entity ID
+            }
             wbuf.write_ubyte(p.gamemode() as u8).unwrap(); // Gamemode
         }
         {
@@ -1001,6 +1005,56 @@ impl Protocol {
             wbuf.write_float(p.yaw()).unwrap(); // Yaw
             wbuf.write_float(p.pitch()).unwrap(); // Pitch
             wbuf.write_byte(0).unwrap(); // Flags
+        }
+
+        self.write_packet(&wbuf)
+    }
+
+    fn spawn_player(&mut self, player: Arc<RwLock<Player>>) -> Result<()> {
+        debug_assert_eq!(self.state, State::Play);
+
+        let mut wbuf = Vec::new();
+        wbuf.write_var_int(0x0C).unwrap(); // Player Spawn packet
+
+        {
+            let p = player.read().unwrap();
+            {
+                let client_lock = p.client();
+                let c = client_lock.read().unwrap();
+                wbuf.write_var_int(c.id() as i32).unwrap(); // The player's Entity ID
+
+                wbuf.write_all(c.uuid().as_bytes()).unwrap();
+            }
+
+            let pos = p.pos();
+            wbuf.write_int((pos.x * 32f64) as i32).unwrap();
+            wbuf.write_int((pos.y * 32f64) as i32).unwrap();
+            wbuf.write_int((pos.z * 32f64) as i32).unwrap();
+
+            wbuf.write_byte(p.yaw() as i8).unwrap();
+            wbuf.write_byte(p.pitch() as i8).unwrap();
+
+            wbuf.write_short(0).unwrap();
+
+
+            wbuf.write_ubyte(0).unwrap();
+            wbuf.write_ubyte(0).unwrap();
+
+
+            wbuf.write_ubyte(0x82).unwrap();
+            {
+                let client_lock = p.client();
+                let c = client_lock.read().unwrap();
+                wbuf.write_string(c.get_username().unwrap()).unwrap();
+            }
+
+            wbuf.write_ubyte(0x66).unwrap();
+            wbuf.write_float(p.health()).unwrap();
+
+            wbuf.write_ubyte(0x0A).unwrap();
+            wbuf.write_ubyte(p.skin_parts().bits()).unwrap();
+
+            wbuf.write_ubyte(0x7f).unwrap();
         }
 
         self.write_packet(&wbuf)

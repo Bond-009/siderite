@@ -9,6 +9,19 @@ use crate::storage::world::World;
 
 bitflags! {
     #[derive(Default)]
+    pub struct SkinFlags: u8 {
+        const CAPE_ENABLED = 0x01;
+        const JACKET_ENABLED = 0x02;
+        const LEFT_SLEEVE_ENABLED = 0x04;
+        const RIGHT_SLEEVE_ENABLED = 0x08;
+        const LEFT_PANTS_LEG_ENABLED = 0x10;
+        const RIGHT_PANTS_LEG_ENABLED = 0x20;
+        const HAT_ENABLED = 0x40;
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
     pub struct Abilities: u8 {
 
         /// Invulnerable.
@@ -49,7 +62,8 @@ pub struct Player {
     may_fly: bool,
     pos: Coord<f64>,
     yaw: f32,
-    pitch: f32
+    pitch: f32,
+    skin_parts: SkinFlags
 }
 
 impl Player {
@@ -69,7 +83,8 @@ impl Player {
             may_fly: gamemode == GameMode::Creative || gamemode == GameMode::Spectator,
             pos,
             yaw: 0f32,
-            pitch: 0f32
+            pitch: 0f32,
+            skin_parts: Default::default()
         }
     }
 
@@ -117,5 +132,9 @@ impl Player {
 
     pub fn pitch(&self) -> f32 {
         self.pitch
+    }
+
+    pub fn skin_parts(&self) -> SkinFlags {
+        self.skin_parts
     }
 }
