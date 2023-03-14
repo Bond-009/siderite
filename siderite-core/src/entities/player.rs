@@ -8,7 +8,7 @@ use crate::coord::Coord;
 use crate::storage::world::World;
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Clone, Copy)]
     pub struct SkinFlags: u8 {
         const CAPE_ENABLED = 0x01;
         const JACKET_ENABLED = 0x02;

@@ -4,11 +4,11 @@ version = "0.0.1"
 authors = ["Bond-009 <bond.009@outlook.com>"]
 keywords = ["siderite", "minecraft", "server"]
 repository = "https://github.com/Bond-009/siderite.git"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 async-trait = "^0.1"
-bitflags = "^1.3"
+bitflags = "^2.0"
 bytebufrs = "^0.1"
 crossbeam-channel = "^0.5"
 lazy_static = "^1.4"

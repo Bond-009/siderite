@@ -9,6 +9,7 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::result::Result;
 use std::sync::Arc;
 
+use base64::prelude::*;
 use log::*;
 use tokio::task;
 
@@ -28,7 +29,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     info!("Starting siderite version {}", VERSION);
 
     let favicon = match fs::read(FAVICON_FILENAME) {
-        Ok(v) => Some(base64::encode(&v)),
+        Ok(v) => Some(BASE64_STANDARD_NO_PAD.encode(&v[..])),
         Err(e) => {
             if e.kind() != ErrorKind::NotFound {
                 warn!("Error opening favicon file '{}': {}", FAVICON_FILENAME, e);
