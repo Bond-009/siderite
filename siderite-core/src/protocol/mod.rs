@@ -12,7 +12,6 @@ use crossbeam_channel::Receiver;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
-use lazy_static::lazy_static;
 use log::*;
 use mcrw::{MCReadExt, MCWriteExt};
 use num_derive::FromPrimitive;
@@ -43,11 +42,6 @@ const VERIFY_TOKEN_LEN: usize = 4;
 const ENCRYPTION_KEY_LEN: usize = 16;
 
 const PADDING: Padding = Padding::PKCS1;
-
-lazy_static! {
-    /// AES/CFB8 cipher used by minecraft
-    static ref CIPHER: Cipher = Cipher::aes_128_cfb8();
-}
 
 /// Maximum duration in between keep alive packets from the client
 const KEEP_ALIVE_MAX: Duration = Duration::from_secs(30);
@@ -578,13 +572,15 @@ impl Protocol {
 
         self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
 
+        // AES/CFB8 cipher used by minecraft
+        let cipher = Cipher::aes_128_cfb8();
         let encrypter = Crypter::new(
-            *CIPHER,
+            cipher,
             Mode::Encrypt,
             &self.encryption_key,
             Some(&self.encryption_key)).unwrap();
         let decrypter = Crypter::new(
-            *CIPHER,
+            cipher,
             Mode::Decrypt,
             &self.encryption_key,
             Some(&self.encryption_key)).unwrap();
