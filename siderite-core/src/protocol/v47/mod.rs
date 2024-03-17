@@ -80,7 +80,9 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     const STEP_SIZE: usize = 2 * size_of::<__m128i>();
 
     let low_mask = _mm_set1_epi8(0x0f);
-    let mut write_buf = [0u8; STEP_SIZE * 2];
+
+    const BUF_SIZE: usize = 2 * STEP_SIZE;
+    let mut write_buf = Align16::<BUF_SIZE>::default().buf;
 
     for section in sections.iter().filter_map(|x| x.as_ref()) {
         for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
@@ -106,10 +108,10 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let third = _mm_unpacklo_epi8(types_with_metas2, types_shift_right2);
             let fourth = _mm_unpackhi_epi8(types_with_metas2, types_shift_right2);
 
-            _mm_storeu_si128(write_buf.as_mut_ptr().cast(), first);
-            _mm_storeu_si128(write_buf[STEP_SIZE / 2..].as_mut_ptr().cast(), second);
-            _mm_storeu_si128(write_buf[STEP_SIZE..].as_mut_ptr().cast(), third);
-            _mm_storeu_si128(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr().cast(), fourth);
+            _mm_store_si128(write_buf.as_mut_ptr().cast(), first);
+            _mm_store_si128(write_buf[STEP_SIZE / 2..].as_mut_ptr().cast(), second);
+            _mm_store_si128(write_buf[STEP_SIZE..].as_mut_ptr().cast(), third);
+            _mm_store_si128(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr().cast(), fourth);
 
             buf.write_all(&write_buf)?;
         }
@@ -118,14 +120,25 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     Ok(())
 }
 
-#[repr(align(32))]
-struct Buffer {
-    buf: [u8; size_of::<__m256i>() * 2]
+#[repr(align(16))]
+struct Align16<const N: usize> {
+    buf: [u8; N]
 }
 
-impl Default for Buffer {
+impl<const N: usize> Default for Align16<N> {
     fn default() -> Self {
-        Self { buf: [0u8; size_of::<__m256i>() * 2] }
+        Self { buf: [0u8; N] }
+    }
+}
+
+#[repr(align(32))]
+struct Align32<const N: usize> {
+    buf: [u8; N]
+}
+
+impl<const N: usize> Default for Align32<N> {
+    fn default() -> Self {
+        Self { buf: [0u8; N] }
     }
 }
 
@@ -137,8 +150,9 @@ unsafe fn write_block_info_avx2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     const STEP_SIZE: usize = size_of::<__m256i>();
 
     let low_mask = _mm256_set1_epi8(0x0f);
-    let mut write_buf = Buffer::default().buf;
-    let mut write_buf = [0u8; size_of::<__m256i>() * 2];
+
+    const BUF_SIZE: usize = 2 * STEP_SIZE;
+    let mut write_buf = Align32::<BUF_SIZE>::default().buf;
 
     for section in sections.iter().filter_map(|x| x.as_ref()) {
         for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
@@ -159,8 +173,8 @@ unsafe fn write_block_info_avx2<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let second = _mm256_unpackhi_epi8(types_with_metas, types_shift_right);
             let first = _mm256_unpacklo_epi8(types_with_metas, types_shift_right);
 
-            // _mm256_storeu_si256(write_buf.as_mut_ptr().cast(), _mm256_permute2x128_si256(first, second, 0x20));
-            // _mm256_storeu_si256(write_buf[STEP_SIZE..].as_mut_ptr().cast(), _mm256_permute2x128_si256(first, second, 0x31));
+            // _mm256_store_si256(write_buf.as_mut_ptr().cast(), _mm256_permute2x128_si256(first, second, 0x20));
+            // _mm256_store_si256(write_buf[STEP_SIZE..].as_mut_ptr().cast(), _mm256_permute2x128_si256(first, second, 0x31));
 
             _mm256_storeu2_m128i(write_buf[STEP_SIZE..].as_mut_ptr().cast(), write_buf.as_mut_ptr().cast(), first);
             _mm256_storeu2_m128i(write_buf[STEP_SIZE + STEP_SIZE / 2..].as_mut_ptr().cast(), write_buf[STEP_SIZE / 2..].as_mut_ptr().cast(), second);
@@ -343,7 +357,7 @@ mod tests {
 
         let mut buf1 = create_output_buf!();
         b.iter(|| {
-            unsafe { write_block_info(black_box(&data), buf1.as_mut_slice()).unwrap(); }
+            write_block_info(black_box(&data), buf1.as_mut_slice()).unwrap();
         });
     }
 
