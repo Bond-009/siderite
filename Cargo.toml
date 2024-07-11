@@ -1,10 +1,10 @@
 [workspace]
-
 members = [
     "siderite",
     "siderite-core",
     "siderite-mojang"
 ]
+resolver = "2"
 
 [profile.release]
 lto = true
