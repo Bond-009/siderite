@@ -1,4 +1,3 @@
-use std::iter::Iterator;
 use std::result;
 
 use async_trait::async_trait;

@@ -1,5 +1,3 @@
-use std::convert::From;
-
 use num_traits::Num;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]

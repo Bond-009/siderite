@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use crate::storage::chunk::*;
-use crate::storage::chunk::section::Section;
 
 #[derive(Default)]
 pub struct ChunkMap {
