@@ -119,6 +119,11 @@ impl Client {
         let packet = Packet::PlayerListItem(PlayerListAction::AddPlayer, Box::new([player]));
         self.protocol.send(packet.clone()).unwrap();
         self.server.broadcast(packet);
+
+        self.server.foreach_player(&|p| {
+            let packet = Packet::SpawnPlayer(p.clone());
+            self.protocol.send(packet).unwrap();
+        })
     }
 
     pub fn handle_left_click(&self, _block_pos: Coord<i32>, _face: BlockFace, status: DigStatus) {
