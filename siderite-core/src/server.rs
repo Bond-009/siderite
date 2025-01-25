@@ -142,7 +142,16 @@ impl Server {
 
         let ps = ProtocolThread::start();
 
-        let listener = TcpListener::bind(address).unwrap();
+        let listener = match TcpListener::bind(address) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("**** FAILED TO BIND TO PORT!");
+                warn!("The exception was: {}", e);
+                warn!("Perhaps a server is already running on that port?");
+                return;
+            }
+        };
+
         for connection in listener.incoming() {
             let mut stream = connection.unwrap();
             if Protocol::legacy_ping(&mut stream) {
