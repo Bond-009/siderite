@@ -1,17 +1,18 @@
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::TICK_DURATION;
 use crate::protocol::Protocol;
 
-const KEEP_ALIVE_INTERVAL: Duration = Duration::from_millis(1000);
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(2);
 
 pub struct ProtocolThread {
     rx: Receiver<Protocol>,
     prots: Vec<Protocol>,
-    last_keep_alive: SystemTime
+    startup_time: Instant,
+    last_keep_alive: Instant
 }
 
 impl ProtocolThread {
@@ -19,10 +20,12 @@ impl ProtocolThread {
         let (tx, rx) = crossbeam_channel::unbounded();
 
         thread::spawn(move || {
+            let now = Instant::now();
             let mut thread = ProtocolThread {
                 rx,
                 prots: Vec::new(),
-                last_keep_alive: SystemTime::now()
+                startup_time: now,
+                last_keep_alive: now
             };
 
             loop {
@@ -41,11 +44,14 @@ impl ProtocolThread {
             self.prots.push(prot);
         }
 
-        let send_keep_alive = self.last_keep_alive.elapsed().unwrap() >= KEEP_ALIVE_INTERVAL;
-        let millis = if send_keep_alive {
-            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as i32
+        let now = Instant::now();
+        let keep_alive_id = if now.duration_since(self.last_keep_alive) >= KEEP_ALIVE_INTERVAL {
+            self.last_keep_alive = now;
+            // vanilla seems to use the raw value of the monotonic clock in milliseconds (at least on Linux)
+            // but we can't easily get that in Rust, so we send the monotonic time since startup in milliseconds
+            Some(now.duration_since(self.startup_time).as_millis() as i32)
         } else {
-            0
+            None
         };
 
         for prot in self.prots.iter_mut() {
@@ -55,8 +61,8 @@ impl ProtocolThread {
             }
 
             prot.process_data();
-            if send_keep_alive {
-                prot.keep_alive(millis);
+            if let Some(keep_alive_id) = keep_alive_id {
+                prot.keep_alive(keep_alive_id);
             }
 
             prot.handle_out_packets();

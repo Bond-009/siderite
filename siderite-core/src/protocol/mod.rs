@@ -5,7 +5,7 @@ mod v47;
 use std::io::{ErrorKind, Read, Write, Result};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use bytebufrs::RingBuf;
 use crossbeam_channel::Receiver;
@@ -104,7 +104,7 @@ pub struct Protocol {
     received_data: RingBuf,
     compressed: bool,
 
-    last_keep_alive: SystemTime,
+    last_keep_alive: Instant,
 
     verify_token: [u8; VERIFY_TOKEN_LEN],
     encryption_key: [u8; ENCRYPTION_KEY_LEN],
@@ -130,7 +130,7 @@ impl Protocol {
             received_data: RingBuf::with_capacity((32 * 1024) - 1),
             compressed: false,
 
-            last_keep_alive: SystemTime::now(),
+            last_keep_alive: Instant::now(),
 
             verify_token: arr,
             encryption_key: [0u8; ENCRYPTION_KEY_LEN],
@@ -666,12 +666,13 @@ impl Protocol {
         debug_assert_eq!(self.state, State::Play);
 
         let _id = rbuf.read_var_int().unwrap();
-        if self.last_keep_alive.elapsed().unwrap() >= KEEP_ALIVE_MAX {
+        let now = Instant::now();
+        if now.duration_since(self.last_keep_alive) >= KEEP_ALIVE_MAX {
             self.disconnect("Timed out!").unwrap();
             return;
         }
 
-        self.last_keep_alive = SystemTime::now();
+        self.last_keep_alive = now;
     }
 
     /// Check the message to see if it begins with a '/'.
