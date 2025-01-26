@@ -216,7 +216,7 @@ unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COU
     const BUF_SIZE: usize = 2 * STEP_SIZE;
 
     let low_mask = vdupq_n_u8(0x0f);
-    let mut write_buf = Align32::<BUF_SIZE>::default().0;
+    let mut write_buf = Align16::<BUF_SIZE>::default().0;
 
     for section in sections.iter().filter_map(|x| x.as_ref()) {
         for i in 0..(SECTION_BLOCK_COUNT / STEP_SIZE) {
