@@ -237,7 +237,7 @@ unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let types_shift_right2 = vshrq_n_u8(in_types2, 4);
             let types_shift_left2 = vshlq_n_u8(in_types2, 4);
             let types_with_metas2 = vorrq_u8(types_shift_left2, metas2);
-
+/*
             let first = vzip1q_u8(types_with_metas1, types_shift_right1);
             let second = vzip2q_u8(types_with_metas1, types_shift_right1);
             let third = vzip1q_u8(types_with_metas2, types_shift_right2);
@@ -247,6 +247,10 @@ unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COU
             vst1q_u8(write_buf[STEP_SIZE / 2..].as_mut_ptr(), second);
             vst1q_u8(write_buf[STEP_SIZE..].as_mut_ptr(), third);
             vst1q_u8(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr(), fourth);
+*/
+
+            vst2q_u8(write_buf.as_mut_ptr(), uint8x16x2_t { 0: types_with_metas1, 1: types_shift_right1});
+            vst2q_u8(write_buf[STEP_SIZE..].as_mut_ptr(), uint8x16x2_t { 0: types_with_metas2, 1: types_shift_right2});
 
             buf.write_all(&write_buf)?;
         }
