@@ -228,26 +228,14 @@ unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COU
             let in_metas128_shifted = vshrq_n_u8(in_metas128, 4);
             let in_metas128_low = vandq_u8(in_metas128, low_mask);
 
-            let metas1 = vzip1q_u8(in_metas128_low, in_metas128_shifted);
-            let metas2 = vzip2q_u8(in_metas128_low, in_metas128_shifted);
+            let metas = vzipq_u8(in_metas128_low, in_metas128_shifted);
 
             let types_shift_right1 = vshrq_n_u8(in_types1, 4);
             let types_shift_left1 = vshlq_n_u8(in_types1, 4);
-            let types_with_metas1 = vorrq_u8(types_shift_left1, metas1);
+            let types_with_metas1 = vorrq_u8(types_shift_left1, metas.0);
             let types_shift_right2 = vshrq_n_u8(in_types2, 4);
             let types_shift_left2 = vshlq_n_u8(in_types2, 4);
-            let types_with_metas2 = vorrq_u8(types_shift_left2, metas2);
-/*
-            let first = vzip1q_u8(types_with_metas1, types_shift_right1);
-            let second = vzip2q_u8(types_with_metas1, types_shift_right1);
-            let third = vzip1q_u8(types_with_metas2, types_shift_right2);
-            let fourth = vzip2q_u8(types_with_metas2, types_shift_right2);
-
-            vst1q_u8(write_buf.as_mut_ptr(), first);
-            vst1q_u8(write_buf[STEP_SIZE / 2..].as_mut_ptr(), second);
-            vst1q_u8(write_buf[STEP_SIZE..].as_mut_ptr(), third);
-            vst1q_u8(write_buf[STEP_SIZE + (STEP_SIZE / 2)..].as_mut_ptr(), fourth);
-*/
+            let types_with_metas2 = vorrq_u8(types_shift_left2, metas.1);
 
             vst2q_u8(write_buf.as_mut_ptr(), uint8x16x2_t { 0: types_with_metas1, 1: types_shift_right1});
             vst2q_u8(write_buf[STEP_SIZE..].as_mut_ptr(), uint8x16x2_t { 0: types_with_metas2, 1: types_shift_right2});
