@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(target_feature = "neon")]
     fn write_block_info_neon_test() {
         let data = [
             Some(Box::new(Section {
@@ -438,7 +438,7 @@ mod tests {
     }
 
     #[bench]
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[cfg(target_feature = "neon")]
     fn write_block_info_neon_bench(b: &mut Bencher) {
         let data = [
             Some(Box::new(Section {
@@ -654,6 +654,7 @@ mod tests {
     }
 
     #[bench]
+    #[cfg(target_feature = "sse2")]
     fn write_block_info_avx2_bench(b: &mut Bencher) {
         let data = [
             Some(Box::new(Section {
