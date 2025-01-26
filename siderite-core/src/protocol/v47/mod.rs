@@ -2,6 +2,9 @@ use std::io::{Result, Write};
 use std::mem::size_of;
 
 #[cfg(target_arch = "aarch64")]
+use std::arch::is_aarch64_feature_detected;
+
+#[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -50,10 +53,13 @@ fn write_block_info<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf
         }
     }
 
-    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-    return unsafe { write_block_info_neon(sections, &mut buf) };
+    #[cfg(target_arch = "aarch64")]
+    {
+        if is_aarch64_feature_detected!("neon") {
+            return unsafe { write_block_info_neon(sections, &mut buf) };
+        }
+    }
 
-    #[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
     write_block_info_fallback(sections, &mut buf)
 }
 
