@@ -43,7 +43,7 @@ pub struct ServerProperties {
     pub online_mode: bool,
     pub allow_flight: bool,
     pub resource_pack_hash: Option<String>,
-    pub max_world_size: i64
+    pub max_world_size: i64,
 }
 
 impl Default for ServerProperties {
@@ -85,7 +85,7 @@ impl Default for ServerProperties {
             online_mode: true,
             allow_flight: false,
             resource_pack_hash: None,
-            max_world_size: 29999984
+            max_world_size: 29999984,
         }
     }
 }
@@ -99,7 +99,7 @@ impl FromStr for ServerProperties {
                 if let Ok(v) = $value.parse() {
                     $dest = v;
                 }
-            }
+            };
         }
 
         macro_rules! parse_optional {
@@ -107,7 +107,7 @@ impl FromStr for ServerProperties {
                 if let Ok(v) = $value.parse() {
                     $dest = Some(v);
                 }
-            }
+            };
         }
 
         macro_rules! parse_optional_str {
@@ -115,13 +115,15 @@ impl FromStr for ServerProperties {
                 if !$value.is_empty() {
                     $dest = Some($value.to_owned());
                 }
-            }
+            };
         }
 
         let mut properties = ServerProperties::default();
-        for (key, value) in s.lines()
-                                .filter(|l| !l.starts_with('#'))
-                                .map(|l| l.split_once('=').unwrap_or((l, ""))) {
+        for (key, value) in s
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .map(|l| l.split_once('=').unwrap_or((l, "")))
+        {
             match key {
                 "view-distance" => parse!(value, properties.view_distance),
                 "max-build-height" => parse!(value, properties.max_building_height),
@@ -130,15 +132,13 @@ impl FromStr for ServerProperties {
                 "server-port" => parse!(value, properties.server_port),
                 "enable-command-block" => parse!(value, properties.enable_command_block),
                 "allow-nether" => parse!(value, properties.allow_nether),
-                "gamemode" => {
-                    match value {
-                        "0" => properties.gamemode = GameMode::Survival,
-                        "1" => properties.gamemode = GameMode::Creative,
-                        "2" => properties.gamemode = GameMode::Adventure,
-                        "3" => properties.gamemode = GameMode::Spectator,
-                        _ => {}
-                    }
-                }
+                "gamemode" => match value {
+                    "0" => properties.gamemode = GameMode::Survival,
+                    "1" => properties.gamemode = GameMode::Creative,
+                    "2" => properties.gamemode = GameMode::Adventure,
+                    "3" => properties.gamemode = GameMode::Spectator,
+                    _ => {}
+                },
                 "enable-rcon" => parse!(value, properties.enable_rcon),
                 "enable-query" => parse!(value, properties.enable_query),
                 "op-permission-level" => parse!(value, properties.op_permission_level),
@@ -147,7 +147,9 @@ impl FromStr for ServerProperties {
                 "player-idle-timeout" => parse!(value, properties.player_idle_timeout),
                 "level-name" => properties.level_name = value.to_owned(),
                 "motd" => properties.motd = value.to_owned(),
-                "announce-player-achievements" => parse!(value, properties.announce_player_achievements),
+                "announce-player-achievements" => {
+                    parse!(value, properties.announce_player_achievements)
+                }
                 "force-gamemode" => parse!(value, properties.force_gamemode),
                 "white-list" => parse!(value, properties.white_list),
                 "pvp" => parse!(value, properties.pvp),
@@ -155,16 +157,16 @@ impl FromStr for ServerProperties {
                 "generate-structures" => parse!(value, properties.generate_structures),
                 "spawn-animals" => parse!(value, properties.spawn_animals),
                 "snooper-enabled" => parse!(value, properties.snooper_enabled),
-                "difficulty" => {
-                    match value {
-                        "0" => properties.difficulty = Difficulty::Peaceful,
-                        "1" => properties.difficulty = Difficulty::Easy,
-                        "2" => properties.difficulty = Difficulty::Normal,
-                        "3" => properties.difficulty = Difficulty::Hard,
-                        _ => {}
-                    }
+                "difficulty" => match value {
+                    "0" => properties.difficulty = Difficulty::Peaceful,
+                    "1" => properties.difficulty = Difficulty::Easy,
+                    "2" => properties.difficulty = Difficulty::Normal,
+                    "3" => properties.difficulty = Difficulty::Hard,
+                    _ => {}
+                },
+                "network-compression-threshold" => {
+                    parse!(value, properties.network_compression_threshold)
                 }
-                "network-compression-threshold" => parse!(value, properties.network_compression_threshold),
                 "level-type" => properties.level_type = value.to_owned(),
                 "spawn-monsters" => parse!(value, properties.spawn_monsters),
                 "max-tick-time" => parse!(value, properties.max_tick_time),
@@ -186,8 +188,7 @@ impl From<ServerProperties> for ServerConfig {
     fn from(properties: ServerProperties) -> ServerConfig {
         let compression_threshold = if properties.network_compression_threshold < 0 {
             None
-        }
-        else {
+        } else {
             Some(properties.network_compression_threshold)
         };
 
@@ -200,7 +201,7 @@ impl From<ServerProperties> for ServerConfig {
             compression_threshold,
             level_type: properties.level_type,
             max_players: properties.max_players,
-            encryption: properties.online_mode
+            encryption: properties.online_mode,
         }
     }
 }

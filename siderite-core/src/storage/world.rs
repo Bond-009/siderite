@@ -12,7 +12,7 @@ use crate::storage::chunk::chunk_map::ChunkMap;
 pub enum Dimension {
     Nether = -1,
     Overworld = 0,
-    End = 1
+    End = 1,
 }
 
 #[repr(u8)]
@@ -21,13 +21,13 @@ pub enum Difficulty {
     Peaceful = 0,
     Easy = 1,
     Normal = 2,
-    Hard = 3
+    Hard = 3,
 }
 
 pub struct WorldConfig {
     pub name: String,
     pub dimension: Dimension,
-    pub spawn_pos: Coord<i32>
+    pub spawn_pos: Coord<i32>,
 }
 
 pub struct World {
@@ -37,7 +37,7 @@ pub struct World {
     players: HashMap<u32, Arc<RwLock<Player>>>,
     chunk_map: Arc<ChunkMap>,
 
-    spawn_pos: Coord<i32>
+    spawn_pos: Coord<i32>,
 }
 
 impl World {
@@ -48,7 +48,7 @@ impl World {
             spawn_pos: config.spawn_pos,
 
             players: HashMap::new(),
-            chunk_map: Arc::new(ChunkMap::new())
+            chunk_map: Arc::new(ChunkMap::new()),
         }
     }
 

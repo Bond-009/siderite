@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpListener};
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, RwLock};
 
 use crossbeam_channel::Sender;
 use log::*;
@@ -34,7 +34,7 @@ pub struct ServerConfig {
     pub compression_threshold: Option<i32>,
     pub level_type: String,
     pub max_players: i32,
-    pub encryption: bool
+    pub encryption: bool,
 }
 
 pub struct Server {
@@ -63,7 +63,6 @@ pub struct Server {
 }
 
 impl Server {
-
     /// Returns the default gamemode.
     pub fn default_gamemode(&self) -> GameMode {
         self.default_gamemode
@@ -109,7 +108,11 @@ impl Server {
         &self.public_key_der
     }
 
-    pub fn new(config: ServerConfig, favicon: Option<String>, authenticator: Sender<AuthInfo>) -> Server {
+    pub fn new(
+        config: ServerConfig,
+        favicon: Option<String>,
+        authenticator: Sender<AuthInfo>,
+    ) -> Server {
         let rsa = Rsa::generate(1024).unwrap();
         Server {
             // MC Update (1.7.x): The server ID is now sent as an empty string.
@@ -133,7 +136,7 @@ impl Server {
             authenticator,
 
             public_key_der: rsa.public_key_to_der().unwrap(),
-            private_key: rsa
+            private_key: rsa,
         }
     }
 
@@ -158,7 +161,9 @@ impl Server {
                 return;
             }
 
-            stream.set_nonblocking(true).expect("set_nonblocking call failed");
+            stream
+                .set_nonblocking(true)
+                .expect("set_nonblocking call failed");
             stream.set_nodelay(true).expect("set_nodeley call failed");
 
             let prot = Protocol::new(svr.clone(), stream);
@@ -191,24 +196,32 @@ impl Server {
             let msg = format!("{} left the game", client.get_username().unwrap());
             info!("{}", msg);
             self.broadcast(Packet::ChatMessage(msg));
-            self.broadcast(Packet::PlayerListItem(PlayerListAction::RemovePlayer, Box::new([player])));
+            self.broadcast(Packet::PlayerListItem(
+                PlayerListAction::RemovePlayer,
+                Box::new([player]),
+            ));
         }
     }
 
     pub fn load_worlds(&mut self) {
         // TODO: change
-        self.worlds.push(Arc::new(RwLock::new(World::new(WorldConfig {
-            name: self.level_name.clone(),
-            dimension: Dimension::Overworld,
-            spawn_pos: Coord::<i32>::new(0, 65, 0)
-        }))));
+        self.worlds
+            .push(Arc::new(RwLock::new(World::new(WorldConfig {
+                name: self.level_name.clone(),
+                dimension: Dimension::Overworld,
+                spawn_pos: Coord::<i32>::new(0, 65, 0),
+            }))));
     }
 
     pub fn default_world(&self) -> Arc<RwLock<World>> {
         self.worlds[0].clone()
     }
 
-    pub fn do_with_client(&self, client_id: u32, function: &dyn Fn(&Arc<RwLock<Client>>) -> bool) -> bool {
+    pub fn do_with_client(
+        &self,
+        client_id: u32,
+        function: &dyn Fn(&Arc<RwLock<Client>>) -> bool,
+    ) -> bool {
         let clients = self.clients.read().unwrap();
 
         if let Some(client) = clients.get(&client_id) {
@@ -261,7 +274,12 @@ impl Server {
             let w = world.read().unwrap();
             w.spawn_pos()
         };
-        let player = Player::new(client_arc2, world.clone(), self.default_gamemode(), spawn.into());
+        let player = Player::new(
+            client_arc2,
+            world.clone(),
+            self.default_gamemode(),
+            spawn.into(),
+        );
         let player_arc = Arc::new(RwLock::new(player));
 
         info!("{}", join_message);
@@ -287,7 +305,13 @@ impl Server {
 
     pub fn broadcast(&self, packet: Packet) {
         self.foreach_player(&|player| {
-            player.read().unwrap().client().read().unwrap().send(packet.clone());
+            player
+                .read()
+                .unwrap()
+                .client()
+                .read()
+                .unwrap()
+                .send(packet.clone());
         });
     }
 }

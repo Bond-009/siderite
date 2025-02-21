@@ -25,5 +25,5 @@ pub enum BlockFace {
     /// -X
     XM = 4,
     /// +X
-    XP = 5
+    XP = 5,
 }

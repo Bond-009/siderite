@@ -1,12 +1,12 @@
-pub mod section;
 pub mod chunk_map;
+pub mod section;
 
 use std::io::{Result, Write};
 
 use num_traits::FromPrimitive;
 
-use crate::coord::{ChunkCoord, Coord};
 use crate::blocks::BlockType;
+use crate::coord::{ChunkCoord, Coord};
 
 use self::section::Section;
 
@@ -32,7 +32,7 @@ pub trait SerializeChunk {
 
 #[derive(Clone, Debug)]
 pub struct ChunkColumn {
-    pub sections: [Option<Box<Section>>; SECTION_COUNT]
+    pub sections: [Option<Box<Section>>; SECTION_COUNT],
 }
 
 impl ChunkColumn {
@@ -58,7 +58,7 @@ impl ChunkColumn {
 
         match &self.sections[section] {
             Some(v) => BlockType::from_u8(v.block_types[index]).unwrap(),
-            None => BlockType::Air
+            None => BlockType::Air,
         }
     }
 
@@ -74,13 +74,13 @@ impl ChunkColumn {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
-                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
+                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2],
             }));
         }
 
         match &mut self.sections[section] {
             Some(v) => v.block_types[index] = block_type as u8,
-            None => panic!("Dunno")
+            None => panic!("Dunno"),
         }
     }
 
@@ -89,7 +89,7 @@ impl ChunkColumn {
 
         match &self.sections[section] {
             Some(v) => v.block_metas[index / 2] >> ((index & 1) * 4) & 0x0f,
-            None => 0
+            None => 0,
         }
     }
 
@@ -105,16 +105,16 @@ impl ChunkColumn {
                 block_types: [0; SECTION_BLOCK_COUNT],
                 block_metas: [0; SECTION_BLOCK_COUNT / 2],
                 block_light: [0; SECTION_BLOCK_COUNT / 2],
-                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2]
+                block_sky_light: [0xff; SECTION_BLOCK_COUNT / 2],
             }));
         }
 
         match &mut self.sections[section] {
             Some(v) => {
                 v.block_metas[index / 2] = (v.block_metas[index / 2] & (0xf0 >> ((index & 1) * 4)))
-                                            | (block_meta & 0x0f) << ((index & 1) * 4)
+                    | (block_meta & 0x0f) << ((index & 1) * 4)
             }
-            None => panic!("Dunno")
+            None => panic!("Dunno"),
         }
     }
 
@@ -122,22 +122,27 @@ impl ChunkColumn {
         let (section, index) = ChunkColumn::get_indices_from_rel_pos(rel_pos);
 
         match &self.sections[section] {
-            Some(v) => (BlockType::from_u8(v.block_types[index]).unwrap(),
-                        v.block_metas[index / 2] >> ((index & 1) * 4) & 0x0f),
-            None => (BlockType::Air, 0)
+            Some(v) => (
+                BlockType::from_u8(v.block_types[index]).unwrap(),
+                v.block_metas[index / 2] >> ((index & 1) * 4) & 0x0f,
+            ),
+            None => (BlockType::Air, 0),
         }
     }
 
     const fn get_indices_from_rel_pos(rel_pos: Coord<i32>) -> (usize, usize) {
         assert!(!Chunk::is_valid_rel_pos(rel_pos));
 
-        ((rel_pos.y / WIDTH) as usize, (rel_pos.x + rel_pos.z * WIDTH + rel_pos.y * AREA) as usize)
+        (
+            (rel_pos.y / WIDTH) as usize,
+            (rel_pos.x + rel_pos.z * WIDTH + rel_pos.y * AREA) as usize,
+        )
     }
 }
 
 pub struct Chunk {
     pub data: ChunkColumn,
-    pub biome_map: [u8; AREA as usize]
+    pub biome_map: [u8; AREA as usize],
 }
 
 impl Chunk {
@@ -146,7 +151,7 @@ impl Chunk {
         Coord {
             x: pos.x - chunk_coord.x * WIDTH,
             y: pos.y,
-            z: pos.z - chunk_coord.z * WIDTH
+            z: pos.z - chunk_coord.z * WIDTH,
         }
     }
 
@@ -155,7 +160,7 @@ impl Chunk {
         Coord {
             x: rel_pos.x + chunk_coord.x * WIDTH,
             y: rel_pos.y,
-            z: rel_pos.z + chunk_coord.z * WIDTH
+            z: rel_pos.z + chunk_coord.z * WIDTH,
         }
     }
 

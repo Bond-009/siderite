@@ -44,7 +44,7 @@ pub enum GameMode {
     Survival = 0,
     Creative = 1,
     Adventure = 2,
-    Spectator = 3
+    Spectator = 3,
 }
 
 /// Default amount of health for a player
@@ -63,7 +63,7 @@ pub struct Player {
     pos: Coord<f64>,
     yaw: f32,
     pitch: f32,
-    skin_parts: SkinFlags
+    skin_parts: SkinFlags,
 }
 
 impl Player {
@@ -71,8 +71,8 @@ impl Player {
         client: Arc<RwLock<Client>>,
         world: Arc<RwLock<World>>,
         gamemode: GameMode,
-        pos: Coord<f64>) -> Self
-    {
+        pos: Coord<f64>,
+    ) -> Self {
         Self {
             client,
             world,
@@ -84,7 +84,7 @@ impl Player {
             pos,
             yaw: 0f32,
             pitch: 0f32,
-            skin_parts: Default::default()
+            skin_parts: Default::default(),
         }
     }
 

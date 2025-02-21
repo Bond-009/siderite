@@ -2,7 +2,7 @@ pub mod packets;
 pub mod thread;
 mod v47;
 
-use std::io::{ErrorKind, Read, Write, Result};
+use std::io::{ErrorKind, Read, Result, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -19,19 +19,19 @@ use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
 use openssl::sha::Sha1;
 use openssl::symm::{Cipher, Crypter, Mode};
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use serde_json::json;
 
 use crate::auth;
 use crate::blocks::BlockFace;
-use crate::coord::{ChunkCoord, Coord};
 use crate::client::Client;
+use crate::coord::{ChunkCoord, Coord};
 use crate::entities::player::{Abilities, Player, SkinFlags};
 use crate::server;
 use crate::server::Server;
-use crate::storage::world::{Difficulty, World};
-use crate::storage::chunk::{Chunk, SerializeChunk};
 use crate::storage::chunk::chunk_map::ChunkMap;
+use crate::storage::chunk::{Chunk, SerializeChunk};
+use crate::storage::world::{Difficulty, World};
 
 use self::packets::{Packet, PlayerListAction};
 
@@ -53,7 +53,7 @@ enum State {
     Status = 0x01,
     Login = 0x02,
     Play = 0x03,
-    Disconnected = 0xFF
+    Disconnected = 0xFF,
 }
 
 #[repr(u8)]
@@ -90,7 +90,7 @@ pub enum DigStatus {
     FinishedDigging = 2,
     DropItemStack = 3,
     DropItem = 4,
-    ShootArrowFinishEating = 5
+    ShootArrowFinishEating = 5,
 }
 
 pub struct Protocol {
@@ -108,11 +108,10 @@ pub struct Protocol {
 
     verify_token: [u8; VERIFY_TOKEN_LEN],
     encryption_key: [u8; ENCRYPTION_KEY_LEN],
-    crypter: Option<(Crypter, Crypter)>
+    crypter: Option<(Crypter, Crypter)>,
 }
 
 impl Protocol {
-
     pub fn new(server: Arc<Server>, stream: TcpStream) -> Self {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
         thread_rng().fill(arr.as_mut_slice());
@@ -134,7 +133,7 @@ impl Protocol {
 
             verify_token: arr,
             encryption_key: [0u8; ENCRYPTION_KEY_LEN],
-            crypter: None
+            crypter: None,
         }
     }
 
@@ -157,7 +156,9 @@ impl Protocol {
         if len == 1 && tbuf[0] == 0xFE {
             stream.read_exact(&mut tbuf).unwrap();
             Protocol::handle_legacy_ping(&mut stream);
-            stream.shutdown(Shutdown::Both).expect("shutdown call failed");
+            stream
+                .shutdown(Shutdown::Both)
+                .expect("shutdown call failed");
             return true;
         }
 
@@ -233,8 +234,8 @@ impl Protocol {
                 let mut dvec = vec![0u8; len];
                 let dlen = de.update(&vec, &mut dvec).unwrap();
                 self.received_data.write_all(&dvec[..dlen]).unwrap();
-            },
-            None => self.received_data.write_all(&vec).unwrap()
+            }
+            None => self.received_data.write_all(&vec).unwrap(),
         }
 
         self.handle_in_packets();
@@ -261,7 +262,9 @@ impl Protocol {
                 return; // Not enough data
             }
 
-            self.received_data.advance_read_pos(mcrw::var_int_size(length as i32)).unwrap();
+            self.received_data
+                .advance_read_pos(mcrw::var_int_size(length as i32))
+                .unwrap();
 
             debug!("Packet length: {}", length);
 
@@ -275,7 +278,7 @@ impl Protocol {
                 debug!("Data length: {}", length);
                 if data_length != 0 {
                     let mut d = ZlibDecoder::new(rslice);
-                    let mut vec = vec!(0u8; data_length as usize);
+                    let mut vec = vec![0u8; data_length as usize];
                     d.read_exact(&mut vec).unwrap();
                     let mut slice = vec.as_slice();
                     let id = slice.read_var_int().unwrap();
@@ -291,15 +294,13 @@ impl Protocol {
 
     fn handle_packet(&mut self, rbuf: &[u8], id: i32) {
         match self.state {
-            State::HandShaking => {
-                match id {
-                    0x00 => self.handle_handshake(rbuf),
-                    _ => {
-                        self.unknown_packet(id);
-                        self.shutdown().unwrap();
-                    }
+            State::HandShaking => match id {
+                0x00 => self.handle_handshake(rbuf),
+                _ => {
+                    self.unknown_packet(id);
+                    self.shutdown().unwrap();
                 }
-            }
+            },
             State::Status => {
                 let res = match id {
                     0x00 => self.handle_request(),
@@ -352,7 +353,8 @@ impl Protocol {
                     0x17 => self.handle_plugin_message(rbuf),
                     _ => {
                         self.unknown_packet(id);
-                        self.disconnect(&format!("Unknown packet: {:#X}", id)).unwrap();
+                        self.disconnect(&format!("Unknown packet: {:#X}", id))
+                            .unwrap();
                     }
                 }
             }
@@ -399,7 +401,7 @@ impl Protocol {
             Packet::ServerDifficulty(difficulty) => self.server_difficulty(difficulty),
             Packet::ResourcePackSend(url, hash) => self.resource_pack_send(&url, &hash),
 
-            Packet::Disconnect(reason) => self.disconnect(&reason)
+            Packet::Disconnect(reason) => self.disconnect(&reason),
         };
 
         if res.is_err() {
@@ -410,12 +412,15 @@ impl Protocol {
 
     fn write_packet(&mut self, rbuf: &[u8]) -> Result<()> {
         let length = rbuf.len() as i32;
-        debug!("Write packet: state: {:?}, len {}, id: {:#X}", self.state, length, rbuf[0]);
+        debug!(
+            "Write packet: state: {:?}, len {}, id: {:#X}",
+            self.state, length, rbuf[0]
+        );
 
         // REVIEW: duplicate code + multiple writes to self.stream
         match &mut self.crypter {
             Some((en, _)) => {
-                let mut buf = vec!(0; rbuf.len() + 10);
+                let mut buf = vec![0; rbuf.len() + 10];
                 if !self.compressed {
                     buf.write_var_int(length)?; // Write packet length
                     buf.write_all(&rbuf)?; // Write packet data
@@ -424,7 +429,8 @@ impl Protocol {
                     buf.write_var_int(0)?;
                     buf.write_all(&rbuf)?;
                 } else {
-                    let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
+                    let mut zen =
+                        ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
                     buf.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
@@ -435,7 +441,7 @@ impl Protocol {
                 let mut enc_buf = vec![0; buf.len() + 128];
                 let enc_len = en.update(&buf, &mut enc_buf).unwrap();
                 self.stream.write_all(&enc_buf[..enc_len])?;
-            },
+            }
             None => {
                 if !self.compressed {
                     self.stream.write_var_int(length)?; // Write packet length
@@ -445,10 +451,12 @@ impl Protocol {
                     self.stream.write_var_int(0)?;
                     self.stream.write_all(&rbuf)?;
                 } else {
-                    let mut zen = ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
+                    let mut zen =
+                        ZlibEncoder::new(Vec::with_capacity(rbuf.len()), Compression::default());
                     zen.write_all(rbuf)?;
                     let comp_buf = zen.finish()?;
-                    self.stream.write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
+                    self.stream
+                        .write_var_int((mcrw::var_int_size(length) + comp_buf.len()) as i32)?;
                     self.stream.write_var_int(length)?;
                     self.stream.write_all(&comp_buf)?;
                 }
@@ -495,11 +503,11 @@ impl Protocol {
                 "text": self.server.motd(),
             },
         });
-        if let Some(favicon) = self.server.favicon()
-        {
+        if let Some(favicon) = self.server.favicon() {
             response.as_object_mut().unwrap().insert(
                 "favicon".to_owned(),
-                json!(format!("data:image/png;base64,{}", favicon)));
+                json!(format!("data:image/png;base64,{}", favicon)),
+            );
         }
 
         let strres = response.to_string();
@@ -527,8 +535,7 @@ impl Protocol {
 
         if self.server.encryption() {
             return self.encryption_request();
-        }
-        else {
+        } else {
             self.client.write().unwrap().handle_login(None);
         }
 
@@ -548,9 +555,14 @@ impl Protocol {
 
         // Decrypt the and verify the Verify Token
         let mut vtdvec = vec![0; vt_len];
-        let vtd_len = private_key.private_decrypt(&vtarr, &mut vtdvec, PADDING).unwrap();
+        let vtd_len = private_key
+            .private_decrypt(&vtarr, &mut vtdvec, PADDING)
+            .unwrap();
         if vtd_len != VERIFY_TOKEN_LEN {
-            debug!("Verify Token is the wrong length: expected {}, got {}", VERIFY_TOKEN_LEN, vtd_len);
+            debug!(
+                "Verify Token is the wrong length: expected {}, got {}",
+                VERIFY_TOKEN_LEN, vtd_len
+            );
             self.disconnect("Hacked client")?;
             return Ok(());
         }
@@ -563,14 +575,20 @@ impl Protocol {
 
         // Decrypt Shared Secret Key
         let mut ssdvec = vec![0; ss_len];
-        let ssd_len = private_key.private_decrypt(&ssarr, &mut ssdvec, PADDING).unwrap();
+        let ssd_len = private_key
+            .private_decrypt(&ssarr, &mut ssdvec, PADDING)
+            .unwrap();
         if ssd_len != ENCRYPTION_KEY_LEN {
-            debug!("Shared Secret Key is the wrong length: expected {}, got {}", ENCRYPTION_KEY_LEN, ssd_len);
+            debug!(
+                "Shared Secret Key is the wrong length: expected {}, got {}",
+                ENCRYPTION_KEY_LEN, ssd_len
+            );
             self.disconnect("Hacked client")?;
             return Ok(());
         }
 
-        self.encryption_key.copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
+        self.encryption_key
+            .copy_from_slice(&ssdvec[..ENCRYPTION_KEY_LEN]);
 
         // AES/CFB8 cipher used by minecraft
         let cipher = Cipher::aes_128_cfb8();
@@ -578,12 +596,16 @@ impl Protocol {
             cipher,
             Mode::Encrypt,
             &self.encryption_key,
-            Some(&self.encryption_key)).unwrap();
+            Some(&self.encryption_key),
+        )
+        .unwrap();
         let decrypter = Crypter::new(
             cipher,
             Mode::Decrypt,
             &self.encryption_key,
-            Some(&self.encryption_key)).unwrap();
+            Some(&self.encryption_key),
+        )
+        .unwrap();
         self.crypter = Some((encrypter, decrypter));
 
         let mut hasher = Sha1::new();
@@ -751,10 +773,11 @@ impl Protocol {
             Coord {
                 x: x as i32,
                 y: y as i32,
-                z: z as i32
+                z: z as i32,
             },
             BlockFace::from_i8(face).unwrap(),
-            DigStatus::from_i8(status).unwrap());
+            DigStatus::from_i8(status).unwrap(),
+        );
     }
 
     /// Sent when the player changes the slot selection
@@ -956,7 +979,8 @@ impl Protocol {
         wbuf.write_var_int(0x02).unwrap(); // Chat Message packet
 
         // TODO:
-        wbuf.write_string(&format!("{{ \"text\": \"{}\" }}", raw_msg)).unwrap(); // JSON Data
+        wbuf.write_string(&format!("{{ \"text\": \"{}\" }}", raw_msg))
+            .unwrap(); // JSON Data
         wbuf.write_ubyte(0).unwrap(); // Position: 0: chat (chat box), 1: system message (chat box), 2: above hotbar
 
         self.write_packet(&wbuf)
@@ -982,7 +1006,8 @@ impl Protocol {
         wbuf.write_var_int(0x05).unwrap(); // Spawn Position packet
 
         let spawn_pos = world.read().unwrap().spawn_pos();
-        wbuf.write_position(spawn_pos.x, spawn_pos.y, spawn_pos.z).unwrap(); // Spawn location
+        wbuf.write_position(spawn_pos.x, spawn_pos.y, spawn_pos.z)
+            .unwrap(); // Spawn location
 
         self.write_packet(&wbuf)
     }
@@ -1033,10 +1058,8 @@ impl Protocol {
 
             wbuf.write_short(0).unwrap();
 
-
             wbuf.write_ubyte(0).unwrap();
             wbuf.write_ubyte(0).unwrap();
-
 
             wbuf.write_ubyte(0x82).unwrap();
             {
@@ -1099,7 +1122,11 @@ impl Protocol {
         self.write_packet(&wbuf)
     }
 
-    fn player_list_item(&mut self, action: PlayerListAction, players: Box<[Arc<RwLock<Player>>]>) -> Result<()> {
+    fn player_list_item(
+        &mut self,
+        action: PlayerListAction,
+        players: Box<[Arc<RwLock<Player>>]>,
+    ) -> Result<()> {
         debug_assert_eq!(self.state, State::Play);
 
         let mut wbuf = Vec::new();
@@ -1130,8 +1157,8 @@ impl Protocol {
                                     wbuf.write_string(signature.as_str().unwrap()).unwrap();
                                 }
                             }
-                        },
-                        _ => wbuf.write_var_int(0).unwrap()
+                        }
+                        _ => wbuf.write_var_int(0).unwrap(),
                     }
 
                     wbuf.write_var_int(player.gamemode() as i32).unwrap(); // Gamemode
@@ -1141,10 +1168,12 @@ impl Protocol {
 
                     wbuf.write_bool(false).unwrap(); // Has Display Name
                 }
-                PlayerListAction::UpdateGamemode => wbuf.write_var_int(player.gamemode() as i32).unwrap(), // Gamemode
+                PlayerListAction::UpdateGamemode => {
+                    wbuf.write_var_int(player.gamemode() as i32).unwrap()
+                } // Gamemode
                 PlayerListAction::UpdateLatency => wbuf.write_var_int(250).unwrap(), // Ping
                 PlayerListAction::UpdateDisplayName => wbuf.write_bool(false).unwrap(), // Has Display Name,
-                PlayerListAction::RemovePlayer => ()
+                PlayerListAction::RemovePlayer => (),
             }
         }
 
@@ -1199,13 +1228,11 @@ impl Protocol {
         debug_assert!(self.state == State::Login || self.state == State::Play);
 
         let mut wbuf = Vec::new();
-        wbuf.write_var_int(
-            match self.state {
-                State::Login => 0x00,
-                State::Play => 0x40,
-                _ => panic!("Unknown state for Disconnect Packet: {:?}", self.state)
-            }
-        )?; // Disconnect packet
+        wbuf.write_var_int(match self.state {
+            State::Login => 0x00,
+            State::Play => 0x40,
+            _ => panic!("Unknown state for Disconnect Packet: {:?}", self.state),
+        })?; // Disconnect packet
 
         info!("Kicking with reason: '{}'", reason);
 

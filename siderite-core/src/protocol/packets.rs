@@ -50,5 +50,5 @@ pub enum PlayerListAction {
     UpdateGamemode = 1,
     UpdateLatency = 2,
     UpdateDisplayName = 3,
-    RemovePlayer = 4
+    RemovePlayer = 4,
 }

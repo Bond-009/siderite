@@ -45,8 +45,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
                 warn!("server.properties does not exist");
-            }
-            else {
+            } else {
                 error!("Failed to load server.properties\n{}", e);
             }
 
@@ -58,14 +57,14 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let online = properties.online_mode;
 
     let listen_addr = SocketAddr::new(
-        properties.server_ip.unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
-        properties.server_port);
+        properties
+            .server_ip
+            .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
+        properties.server_port,
+    );
     let (tx, rx) = crossbeam_channel::unbounded();
 
-    let mut server = Server::new(
-        properties.into(),
-        favicon,
-        tx);
+    let mut server = Server::new(properties.into(), favicon, tx);
 
     server.load_worlds();
 
@@ -77,7 +76,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         for m in rx.iter() {
             match authenticator.authenticate(m).await {
                 Ok(o) => server_ref.auth_user(o.client_id, o.username, o.uuid, o.properties),
-                Err(e) => error!("Failed auth with {:?}", e)
+                Err(e) => error!("Failed auth with {:?}", e),
             }
         }
     });

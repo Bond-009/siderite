@@ -12,24 +12,24 @@ pub type Result = result::Result<AuthResponse, Error>;
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Error {
     NoServerId,
-    Failed
+    Failed,
 }
 
 pub struct AuthResponse {
     pub client_id: u32,
     pub username: String,
     pub uuid: Uuid,
-    pub properties: Value
+    pub properties: Value,
 }
 
 pub struct AuthInfo {
     pub client_id: u32,
     pub server_id: Option<String>,
-    pub username: String
+    pub username: String,
 }
 
 #[async_trait]
-pub trait Authenticator : Send + Sync {
+pub trait Authenticator: Send + Sync {
     async fn authenticate(&self, info: AuthInfo) -> Result;
 }
 
@@ -43,7 +43,7 @@ impl Authenticator for OfflineAuthenticator {
             client_id: info.client_id,
             username: info.username,
             uuid,
-            properties: json::Value::Null
+            properties: json::Value::Null,
         })
     }
 }

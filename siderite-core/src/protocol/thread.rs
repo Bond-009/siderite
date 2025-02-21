@@ -12,7 +12,7 @@ pub struct ProtocolThread {
     rx: Receiver<Protocol>,
     prots: Vec<Protocol>,
     startup_time: Instant,
-    last_keep_alive: Instant
+    last_keep_alive: Instant,
 }
 
 impl ProtocolThread {
@@ -25,7 +25,7 @@ impl ProtocolThread {
                 rx,
                 prots: Vec::new(),
                 startup_time: now,
-                last_keep_alive: now
+                last_keep_alive: now,
             };
 
             loop {

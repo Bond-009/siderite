@@ -7,13 +7,13 @@ use uuid::Uuid;
 use siderite_core::auth::*;
 
 pub struct MojangAuthenticator {
-    client: MojangClient
+    client: MojangClient,
 }
 
 impl MojangAuthenticator {
     pub fn new() -> Self {
         Self {
-            client: MojangClient::new()
+            client: MojangClient::new(),
         }
     }
 }
@@ -25,14 +25,18 @@ impl Authenticator for MojangAuthenticator {
             return Err(Error::NoServerId);
         }
 
-        let res = self.client.auth_with_yggdrasil(&info.username, &info.server_id.unwrap()).await.map_err(|_| Error::Failed)?;
+        let res = self
+            .client
+            .auth_with_yggdrasil(&info.username, &info.server_id.unwrap())
+            .await
+            .map_err(|_| Error::Failed)?;
         let uuid = Uuid::parse_str(&res.id).unwrap();
 
         Ok(AuthResponse {
             client_id: info.client_id,
             username: res.name,
             uuid,
-            properties: res.properties
+            properties: res.properties,
         })
     }
 }

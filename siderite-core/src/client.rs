@@ -1,16 +1,16 @@
 use std::sync::{Arc, RwLock};
 
 use crossbeam_channel::Sender;
-use uuid::Uuid;
 use serde_json as json;
+use uuid::Uuid;
 
 use crate::auth::AuthInfo;
 use crate::blocks::BlockFace;
+use crate::coord::{ChunkCoord, Coord};
 use crate::entities::player::Player;
 use crate::protocol::DigStatus;
 use crate::protocol::packets::{Packet, PlayerListAction};
 use crate::server::Server;
-use crate::coord::{ChunkCoord, Coord};
 
 pub struct Client {
     id: u32,
@@ -25,9 +25,8 @@ pub struct Client {
 }
 
 impl Client {
-
     pub fn new(id: u32, server: Arc<Server>, protocol: Sender<Packet>) -> Self {
-         Self {
+        Self {
             id,
             username: None,
             uuid: Uuid::nil(),
@@ -65,15 +64,24 @@ impl Client {
     }
 
     pub fn kick(&self, reason: &str) {
-        self.protocol.send(Packet::Disconnect(reason.to_owned())).unwrap();
+        self.protocol
+            .send(Packet::Disconnect(reason.to_owned()))
+            .unwrap();
     }
 
     pub fn handle_login(&self, server_id: Option<String>) {
-        self.server.authenticator.send(AuthInfo {
-            client_id: self.id,
-            server_id,
-            username: self.username.as_ref().expect("expected username").to_owned()
-        }).unwrap();
+        self.server
+            .authenticator
+            .send(AuthInfo {
+                client_id: self.id,
+                server_id,
+                username: self
+                    .username
+                    .as_ref()
+                    .expect("expected username")
+                    .to_owned(),
+            })
+            .unwrap();
     }
 
     pub fn auth(&mut self, username: String, uuid: Uuid, properties: json::Value) {
@@ -95,25 +103,32 @@ impl Client {
         let world = player.read().unwrap().world();
         let chunk_map = world.read().unwrap().chunk_map();
 
-        self.protocol.send(Packet::JoinGame(player.clone(), world.clone())).unwrap();
-        self.protocol.send(Packet::SpawnPosition(world.clone())).unwrap();
-        self.protocol.send(Packet::ServerDifficulty(self.server.difficulty())).unwrap();
-        self.protocol.send(Packet::PlayerAbilities(player.clone())).unwrap();
+        self.protocol
+            .send(Packet::JoinGame(player.clone(), world.clone()))
+            .unwrap();
+        self.protocol
+            .send(Packet::SpawnPosition(world.clone()))
+            .unwrap();
+        self.protocol
+            .send(Packet::ServerDifficulty(self.server.difficulty()))
+            .unwrap();
+        self.protocol
+            .send(Packet::PlayerAbilities(player.clone()))
+            .unwrap();
 
         for x in -3..3 {
             for z in -3..3 {
-                let coord = ChunkCoord {x, z};
+                let coord = ChunkCoord { x, z };
                 let map = chunk_map.clone();
                 map.touch_chunk(coord);
-                self.protocol.send(Packet::ChunkData(
-                        coord,
-                        map)
-                    ).unwrap();
+                self.protocol.send(Packet::ChunkData(coord, map)).unwrap();
             }
         }
 
         self.protocol.send(Packet::TimeUpdate(world)).unwrap();
-        self.protocol.send(Packet::PlayerPositionAndLook(player.clone())).unwrap();
+        self.protocol
+            .send(Packet::PlayerPositionAndLook(player.clone()))
+            .unwrap();
 
         // Add ourself to the tab menu
         let packet = Packet::PlayerListItem(PlayerListAction::AddPlayer, Box::new([player]));
@@ -128,7 +143,7 @@ impl Client {
             DigStatus::FinishedDigging => (),
             DigStatus::DropItemStack => (),
             DigStatus::DropItem => (),
-            DigStatus::ShootArrowFinishEating => ()
+            DigStatus::ShootArrowFinishEating => (),
         };
     }
 
