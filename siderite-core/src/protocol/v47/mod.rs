@@ -96,7 +96,7 @@ impl<const N: usize> Default for Align16<N> {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "sse2")]
 unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
-    where W : Write {
+    where W : Write { unsafe {
 
     const VECTOR_SIZE: usize = size_of::<__m128i>();
     const STEP_SIZE: usize = 2 * VECTOR_SIZE;
@@ -143,7 +143,7 @@ unsafe fn write_block_info_sse2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     }
 
     Ok(())
-}
+}}
 
 #[repr(C, align(32))]
 struct Align32<const N: usize>([u8; N]);
@@ -157,7 +157,7 @@ impl<const N: usize> Default for Align32<N> {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn write_block_info_avx2<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
-    where W : Write {
+    where W : Write { unsafe {
 
     const VECTOR_SIZE: usize = size_of::<__m256i>();
     const STEP_SIZE: usize = 2 * VECTOR_SIZE;
@@ -204,12 +204,12 @@ unsafe fn write_block_info_avx2<W>(sections: &[Option<Box<Section>>; SECTION_COU
     }
 
     Ok(())
-}
+}}
 
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
 unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COUNT], mut buf: W) -> Result<()>
-    where W : Write {
+    where W : Write { unsafe {
 
     const VECTOR_SIZE: usize = size_of::<uint8x16_t>();
     const STEP_SIZE: usize = 2 * VECTOR_SIZE;
@@ -245,7 +245,7 @@ unsafe fn write_block_info_neon<W>(sections: &[Option<Box<Section>>; SECTION_COU
     }
 
     Ok(())
-}
+}}
 
 #[cfg(test)]
 mod tests {

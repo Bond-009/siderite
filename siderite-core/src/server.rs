@@ -178,7 +178,8 @@ impl Server {
         }
         let mut player = None;
         for world in &self.worlds {
-            if let Some(v) = world.write().unwrap().remove_player(id) {
+            let mut world = world.write().unwrap();
+            if let Some(v) = world.remove_player(id) {
                 player = Some(v);
                 break;
             }

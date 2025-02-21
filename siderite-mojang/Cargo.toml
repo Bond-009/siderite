@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = ["Bond-009 <bond.009@outlook.com>"]
 keywords = ["siderite", "minecraft", "server"]
 repository = "https://github.com/Bond-009/siderite.git"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 async-trait = "^0.1"

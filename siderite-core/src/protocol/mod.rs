@@ -1118,21 +1118,20 @@ impl Protocol {
             match action {
                 PlayerListAction::AddPlayer => {
                     wbuf.write_string(client.get_username().unwrap()).unwrap();
-                    if let Some(properties) = client.properties().as_array()
-                    {
-                        wbuf.write_var_int(properties.len() as i32).unwrap();
-                        for prop in properties {
-                            wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
-                            wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
-                            let signature = prop.get("signature");
-                            wbuf.write_bool(signature.is_some()).unwrap();
-                            if let Some(signature) = signature {
-                                wbuf.write_string(signature.as_str().unwrap()).unwrap();
+                    match client.properties().as_array() {
+                        Some(properties) => {
+                            wbuf.write_var_int(properties.len() as i32).unwrap();
+                            for prop in properties {
+                                wbuf.write_string(prop["name"].as_str().unwrap()).unwrap();
+                                wbuf.write_string(prop["value"].as_str().unwrap()).unwrap();
+                                let signature = prop.get("signature");
+                                wbuf.write_bool(signature.is_some()).unwrap();
+                                if let Some(signature) = signature {
+                                    wbuf.write_string(signature.as_str().unwrap()).unwrap();
+                                }
                             }
-                        }
-                    }
-                    else {
-                        wbuf.write_var_int(0).unwrap();
+                        },
+                        _ => wbuf.write_var_int(0).unwrap()
                     }
 
                     wbuf.write_var_int(player.gamemode() as i32).unwrap(); // Gamemode
