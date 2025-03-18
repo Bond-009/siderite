@@ -19,7 +19,7 @@ use num_traits::FromPrimitive;
 use openssl::rsa::Padding;
 use openssl::sha::Sha1;
 use openssl::symm::{Cipher, Crypter, Mode};
-use rand::{Rng, thread_rng};
+use rand::{Rng, rng};
 use serde_json::json;
 
 use crate::auth;
@@ -114,7 +114,7 @@ pub struct Protocol {
 impl Protocol {
     pub fn new(server: Arc<Server>, stream: TcpStream) -> Self {
         let mut arr = [0u8; VERIFY_TOKEN_LEN];
-        thread_rng().fill(arr.as_mut_slice());
+        rng().fill(arr.as_mut_slice());
         let (tx, rx) = crossbeam_channel::unbounded();
         // The player will get the same ID as the client
         let client_id = server::get_next_entity_id();
