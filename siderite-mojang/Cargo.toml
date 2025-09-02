@@ -1,7 +1,7 @@
 [package]
 name = "siderite-mojang"
 version = "0.0.1"
-authors = ["Bond-009 <bond.009@outlook.com>"]
+authors = ["Bond_009 <bond.009@outlook.com>"]
 keywords = ["siderite", "minecraft", "server"]
 repository = "https://github.com/Bond-009/siderite.git"
 edition = "2024"
@@ -11,7 +11,7 @@ async-trait = "^0.1"
 serde_json = "^1.0"
 
 [dependencies.uuid]
-version = "^1.2"
+version = "^1.18"
 default-features = false
 
 [dependencies.siderite-core]
